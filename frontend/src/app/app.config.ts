@@ -60,8 +60,10 @@ export function MSALGuardConfigFactory(): MsalGuardConfiguration {
 
 export function MSALInterceptorConfigFactory(): MsalInterceptorConfiguration {
   const protectedResourceMap = new Map<string, Array<string>>();
-  protectedResourceMap.set(environment.apiUrl, [environment.apiScope]);
-
+  // IMPORTANTE: la key DEBE terminar con "/" para que MsalInterceptor (v6) haga
+  // el matching de prefijo correctamente contra URLs con path (/api/orders, etc.).
+  // Sin la barra final, el interceptor NO reconoce los requests y no adjunta el token → 401.
+  protectedResourceMap.set('https://r5qzahr13b.execute-api.us-east-1.amazonaws.com/*', [environment.apiScope]);
   return {
     interactionType: InteractionType.Redirect,
     protectedResourceMap

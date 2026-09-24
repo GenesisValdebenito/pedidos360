@@ -1,26 +1,30 @@
-<div style="font-family: sans-serif; padding: 20px; max-width: 800px; margin: 0 auto;">
-  <header style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #ddd; padding-bottom: 12px; margin-bottom: 20px;">
+<div style="font-family: sans-serif; padding: 20px; max-width: 900px; margin: 0 auto;">
+  <header
+    style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #ddd; padding-bottom: 12px; margin-bottom: 20px;">
     <h1 style="margin: 0; font-size: 24px;">Pedidos360 — Frontend</h1>
-    
+
     <div>
       <ng-container *ngIf="loginDisplay; else loginButton">
         <span style="margin-right: 15px;">Hola, <strong>{{ userName }}</strong></span>
         <button (click)="logout()" style="padding: 6px 12px; cursor: pointer;">Cerrar sesión</button>
       </ng-container>
       <ng-template #loginButton>
-        <button (click)="login()" style="padding: 6px 12px; cursor: pointer; background: #0078d4; color: white; border: none; border-radius: 4px;">Iniciar sesión con Entra ID</button>
+        <button (click)="login()"
+          style="padding: 6px 12px; cursor: pointer; background: #0078d4; color: white; border: none; border-radius: 4px;">Iniciar
+          sesión con Entra ID</button>
       </ng-template>
     </div>
   </header>
 
-  <nav style="margin-bottom: 20px; display: flex; gap: 10px;">
-    <a routerLink="/" style="text-decoration: none; color: #0078d4;">Inicio</a> |
-    <a routerLink="/dashboard" style="text-decoration: none; color: #0078d4;">Dashboard (Protegido por MsalGuard)</a>
+  <nav style="margin-bottom: 20px; display: flex; gap: 12px;" *ngIf="loginDisplay">
+    <a routerLink="/dashboard" style="text-decoration: none; color: #0078d4;">Dashboard</a> |
+    <a routerLink="/orders" style="text-decoration: none; color: #0078d4;">Pedidos</a> |
+    <a routerLink="/catalog" style="text-decoration: none; color: #0078d4;">Catálogo</a>
   </nav>
 
   <main>
     <div *ngIf="!loginDisplay" style="background: #f9f9f9; padding: 16px; border-radius: 4px; margin-bottom: 20px;">
-      <p>Estado: <em>No autenticado</em>. Haz clic en "Iniciar sesión con Entra ID" o accede al <a routerLink="/dashboard">Dashboard</a> para probar la redirección automática del guard.</p>
+      <p>Estado: <em>No autenticado</em>. Haz clic en "Iniciar sesión con Entra ID" para acceder.</p>
     </div>
 
     <router-outlet></router-outlet>
