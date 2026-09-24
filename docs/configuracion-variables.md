@@ -112,7 +112,15 @@ Sigue exactamente los mismos pasos que en orders-service, con los valores reales
 
 ---
 
-## 4. Recomendación de uso seguro
+## 4. Plantilla para completar manualmente
+
+Si quieres rellenar los valores reales a mano sin tocar el código, usa esta plantilla:
+
+- [docs/plantilla-credenciales-locales.md](plantilla-credenciales-locales.md)
+
+Es un formulario en blanco para completar tus datos reales localmente y mantenerlos fuera del repositorio.
+
+## 5. Recomendación de uso seguro
 
 No copies valores reales directamente al repo. Lo correcto es:
 
@@ -135,7 +143,7 @@ Luego el proyecto puede leer esas variables sin guardar secretos en el código.
 
 ---
 
-## 5. Checklist final
+## 6. Checklist final
 
 Antes de ejecutar la app, valida esto:
 

@@ -157,29 +157,29 @@ Los microservicios quedarán disponibles en:
 ## 8. Backlog / Progreso del proyecto
 
 ### Sesión 1 — Identidad + esqueleto
-- [ ] Repositorio y estructura de carpetas creada
-- [ ] `.gitignore` configurado
-- [ ] App registrada en Microsoft Entra ID (tenant, App Registration, Redirect URI)
-- [ ] Usuarios de prueba con roles (Admin/Operador/Cliente)
-- [ ] Angular + MSAL: login/logout funcionando
-- [ ] Scaffolding de orders-service y catalog-service (compilando)
+- [ x] Repositorio y estructura de carpetas creada
+- [ x] `.gitignore` configurado
+- [ x] App registrada en Microsoft Entra ID (tenant, App Registration, Redirect URI)
+- [ x] Usuarios de prueba con roles (Admin/Operador/Cliente)
+- [ x] Angular + MSAL: login/logout funcionando
+- [ x] Scaffolding de orders-service y catalog-service (compilando)
 
 ### Sesión 2 — Backend + seguridad + persistencia
-- [ ] BD cloud configurada y conectada
-- [ ] Entidades y repositorios: Order, OrderItem, Product
-- [ ] Spring Security valida JWT (issuer, audience, firma, expiración)
-- [ ] Endpoints de Pedidos (CRUD + cambio de estado + regla ACEPTADO→DESPACHADO)
-- [ ] Endpoints de Catálogo (CRUD + descuento de stock al aceptar pedido)
-- [ ] API Gateway desplegado con JWT Authorizer + CORS
+- [ x] BD cloud configurada y conectada
+- [ x] Entidades y repositorios: Order, OrderItem, Product
+- [ ]x Spring Security valida JWT (issuer, audience, firma, expiración)
+- [ x] Endpoints de Pedidos (CRUD + cambio de estado + regla ACEPTADO→DESPACHADO)
+- [ x] Endpoints de Catálogo (CRUD + descuento de stock al aceptar pedido)
+- [ x] API Gateway desplegado con JWT Authorizer + CORS
 
 ### Sesión 3 — Frontend + integración + pruebas
-- [ ] Pantallas `/dashboard`, `/orders`, `/catalog` conectadas a la API
-- [ ] MsalGuard en rutas protegidas + MsalInterceptor adjuntando token
-- [ ] Diferenciación por rol funcionando
-- [ ] Flujo end-to-end probado (Angular → Gateway → Backend → BD)
-- [ ] Casos 200/401/403 probados y documentados
-- [ ] Repositorio limpio, sin secretos
-- [ ] Recorrido del video EP2 preparado
+- [ x] Pantallas `/dashboard`, `/orders`, `/catalog` conectadas a la API
+- [ ]x MsalGuard en rutas protegidas + MsalInterceptor adjuntando token
+- [ x] Diferenciación por rol funcionando
+- [ x] Flujo end-to-end probado (Angular → Gateway → Backend → BD)
+- [ x] Casos 200/401/403 probados y documentados
+- [ x] Repositorio limpio, sin secretos
+- [ x] Recorrido del video EP2 preparado
 
 ## 9. Seguridad
 
