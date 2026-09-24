@@ -1,14 +1,22 @@
 # Secretos y variables de entorno (CRÍTICO - nunca subir)
 .env
 .env.*
+!.env.example
+!.env.sample
 **/environment.ts
 **/environment.prod.ts
 !**/environment.example.ts
-**/application-secrets.properties
+**/application.properties
 **/application-local.properties
+**/application-secrets.properties
+!**/application-example.properties
 *.pem
 *.key
+*.crt
+*.p12
 *credentials*
+**/*secret*.*
+**/*secrets*.*
 
 # Angular / Node
 frontend/node_modules/
@@ -34,3 +42,9 @@ backend/**/application-secrets.properties
 
 # Logs
 *.log
+
+# Archivos locales de configuración no versionados
+**/application*.properties
+!**/application-example.properties
+**/environment*.ts
+!**/environment.example.ts

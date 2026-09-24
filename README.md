@@ -90,23 +90,69 @@ PUT    /api/catalog/products/{id}
 
 ## 7. Cómo ejecutar el proyecto
 
-### Frontend (Angular)
+### Requisitos previos
+- Node.js 18+ y npm
+- Java 17+ y Maven/./mvnw
+- Acceso a Microsoft Entra ID (App Registration para MSAL)
+- Base de datos PostgreSQL (Supabase o equivalente)
+- Variables de entorno configuradas para la API Gateway y BD
+
+### 1) Configurar variables locales
+Copia los archivos de ejemplo sin secretos y completa tus valores reales en tu entorno local:
+
+- Frontend:
+  - copiar `frontend/src/environments/environment.example.ts` a `frontend/src/environments/environment.ts`
+- Backend orders-service:
+  - copiar `backend/orders-service/src/main/resources/application-example.properties` a `backend/orders-service/src/main/resources/application.properties`
+- Backend catalog-service:
+  - copiar `backend/catalog-service/src/main/resources/application-example.properties` a `backend/catalog-service/src/main/resources/application.properties`
+
+También puedes usar variables de entorno del sistema, por ejemplo:
+- `AZURE_TENANT_ISSUER_URI`
+- `AZURE_API_CLIENT_ID`
+- `DB_HOST`
+- `DB_PORT`
+- `DB_NAME`
+- `DB_USERNAME`
+- `DB_PASSWORD`
+
+### 2) Ejecutar frontend (Angular)
 ```bash
 cd frontend
 npm install
-ng serve
+npm start
 ```
-Configurar variables de entorno de MSAL en `src/environments/environment.ts` (clientId, authority, redirectUri) — **no subir valores reales al repo**, usar un archivo de ejemplo `environment.example.ts`.
+Si prefieres usar Angular CLI directamente:
+```bash
+cd frontend
+npx ng serve
+```
+La app quedará disponible en http://localhost:4200
 
-### Backend (Spring Boot)
+### 3) Ejecutar backend (Spring Boot)
+En terminal 1:
 ```bash
 cd backend/orders-service
 ./mvnw spring-boot:run
-
+```
+En terminal 2:
+```bash
 cd backend/catalog-service
 ./mvnw spring-boot:run
 ```
-Configurar `application.properties` con las credenciales de BD cloud vía variables de entorno — **no subir credenciales reales al repo**.
+Los microservicios quedarán disponibles en:
+- Orders: http://localhost:8081
+- Catalog: http://localhost:8082
+
+### 4) Verificar salud inicial
+- Frontend: abrir http://localhost:4200
+- Orders service: http://localhost:8081/actuator/health (si está habilitado)
+- Catalog service: http://localhost:8082/actuator/health (si está habilitado)
+
+### 5) Recomendaciones de seguridad
+- Nunca subir archivos con credenciales reales ni conexiones a BD al repositorio.
+- Mantener `application.properties` y `environment.ts` locales y no versionados.
+- Usar `.env` o variables de entorno del sistema para valores sensibles.
 
 ## 8. Backlog / Progreso del proyecto
 
