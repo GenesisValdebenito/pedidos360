@@ -40,7 +40,12 @@ import { environment } from '../../environments/environment.example';
       </div>
 
       <div *ngIf="cargando">Cargando productos...</div>
-      <div *ngIf="error" style="color: red;">{{ error }}</div>
+      <div *ngIf="error" role="alert" style="padding: 12px; color: #8a1c1c; background: #fff4f4; border-radius: 4px;">
+        <p>{{ error }}</p>
+        <button (click)="cargarProductos()" [disabled]="cargando" style="padding: 6px 12px; cursor: pointer;">
+          Reintentar
+        </button>
+      </div>
 
       <table *ngIf="!cargando && products.length > 0" style="width: 100%; border-collapse: collapse;">
         <thead>
@@ -100,13 +105,16 @@ export class CatalogComponent implements OnInit {
 
     cargarProductos(): void {
         this.cargando = true;
+        this.error = '';
         this.http.get<any[]>(`${environment.apiUrl}/api/catalog/products`).subscribe({
             next: (data) => {
                 this.products = data;
                 this.cargando = false;
             },
             error: (err) => {
-                this.error = `Error al cargar productos: ${err.status} ${err.statusText}`;
+                this.error = err.status === 503
+                    ? 'El catálogo no está disponible en este momento. Intenta nuevamente más tarde.'
+                    : 'No se pudieron cargar los productos. Intenta nuevamente.';
                 this.cargando = false;
             }
         });

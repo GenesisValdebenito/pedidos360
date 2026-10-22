@@ -33,7 +33,12 @@ import { environment } from '../../environments/environment.example';
       </div>
 
       <div *ngIf="cargando">Cargando pedidos...</div>
-      <div *ngIf="error" style="color: red;">{{ error }}</div>
+      <div *ngIf="error" role="alert" style="padding: 12px; color: #8a1c1c; background: #fff4f4; border-radius: 4px;">
+        <p>{{ error }}</p>
+        <button (click)="cargarPedidos()" [disabled]="cargando" style="padding: 6px 12px; cursor: pointer;">
+          Reintentar
+        </button>
+      </div>
 
       <table *ngIf="!cargando && orders.length > 0" style="width: 100%; border-collapse: collapse;">
         <thead>
@@ -104,13 +109,16 @@ export class OrdersComponent implements OnInit {
 
     cargarPedidos(): void {
         this.cargando = true;
+        this.error = '';
         this.http.get<any[]>(`${environment.apiUrl}/api/orders`).subscribe({
             next: (data) => {
                 this.orders = data.map(o => ({ ...o, nuevoEstado: o.estado }));
                 this.cargando = false;
             },
             error: (err) => {
-                this.error = `Error al cargar pedidos: ${err.status} ${err.statusText}`;
+                this.error = err.status === 503
+                    ? 'Los pedidos no están disponibles en este momento. Intenta nuevamente más tarde.'
+                    : `No se pudieron cargar los pedidos (${err.status || 'sin conexión'}). Intenta nuevamente.`;
                 this.cargando = false;
             }
         });
@@ -126,7 +134,9 @@ export class OrdersComponent implements OnInit {
                 this.cargarPedidos();
             },
             error: (err) => {
-                this.errorCrear = `Error al crear pedido: ${err.status} ${err.statusText}`;
+                this.errorCrear = err.status === 503
+                    ? 'El servicio de pedidos no está disponible. Intenta nuevamente más tarde.'
+                    : `No se pudo crear el pedido (${err.status || 'sin conexión'}).`;
             }
         });
     }
@@ -137,7 +147,10 @@ export class OrdersComponent implements OnInit {
                 order.estado = order.nuevoEstado;
             },
             error: (err) => {
-                alert(`Error al cambiar estado: ${err.status} ${err.statusText}`);
+                const mensaje = err.status === 503
+                    ? 'El servicio de pedidos no está disponible. Intenta nuevamente más tarde.'
+                    : `No se pudo cambiar el estado del pedido (${err.status || 'sin conexión'}).`;
+                alert(mensaje);
             }
         });
     }
