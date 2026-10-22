@@ -3,6 +3,7 @@ package com.pedidos360.catalog_service.controller;
 import com.pedidos360.catalog_service.model.Product;
 import com.pedidos360.catalog_service.service.ProductService;
 import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -24,9 +25,13 @@ public class ProductController {
 
     // Inyectamos el servicio por constructor (buena práctica en Spring)
     private final ProductService productService;
+    private final String tokenInterno;
 
-    public ProductController(ProductService productService) {
+    public ProductController(
+            ProductService productService,
+            @Value("${pedidos360.internal-token}") String tokenInterno) {
         this.productService = productService;
+        this.tokenInterno = tokenInterno;
     }
 
     /**
@@ -124,8 +129,7 @@ public class ProductController {
     /**
      * PUT /api/catalog/products/{id}/descontar-stock?cantidad=N
      * Descuenta N unidades del stock de un producto.
-     * NO requiere rol Admin — cualquier usuario autenticado puede llamarlo
-     * (lo usará el orders-service cuando se cree un pedido).
+     * Solo se permite a orders-service, que debe enviar el token interno compartido.
      *
      * Si hay suficiente stock → 200 OK.
      * Si no hay suficiente stock → 400 Bad Request (capturamos la excepción del service).
@@ -134,10 +138,19 @@ public class ProductController {
      */
     @PutMapping("/{id}/descontar-stock")
     public ResponseEntity<Void> descontarStock(
+            @RequestHeader(value = "X-Internal-Service-Token", required = false) String tokenRecibido,
             @PathVariable Long id,
             @RequestParam int cantidad) {
 
+        if (tokenRecibido == null || !tokenInterno.equals(tokenRecibido)) {
+            return ResponseEntity.status(403).build();
+        }
+
         try {
+            if (cantidad < 1) {
+                return ResponseEntity.badRequest().build();
+            }
+
             // Intentamos descontar el stock
             productService.descontarStock(id, cantidad);
             return ResponseEntity.ok().build();

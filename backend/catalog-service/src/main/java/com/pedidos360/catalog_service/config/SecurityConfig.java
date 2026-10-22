@@ -27,6 +27,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(authorize -> authorize
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/catalog/publico").permitAll()
+                .requestMatchers(HttpMethod.PUT, "/api/catalog/products/*/descontar-stock").permitAll()
                 .requestMatchers("/api/**").hasAuthority("SCOPE_Pedidos.Read")
                 .anyRequest().authenticated()
             )

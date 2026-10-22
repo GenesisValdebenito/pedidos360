@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Controller de pedidos — recibe las peticiones HTTP, llama al Service
@@ -77,11 +78,24 @@ public class OrderController {
      * 200 si existe, 404 si no existe.
      */
     @GetMapping("/{id}")
-    public ResponseEntity<Order> buscarPorId(@PathVariable Long id) {
+    public ResponseEntity<Order> buscarPorId(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable Long id) {
         Order pedido = orderService.buscarPorId(id);
         if (pedido == null) {
             return ResponseEntity.notFound().build();
         }
+
+        List<String> roles = jwt.getClaimAsStringList("roles");
+        boolean esAdminOperador = roles != null &&
+                (roles.contains("Admin") || roles.contains("Operador"));
+        String cliente = jwt.getClaimAsString("preferred_username");
+
+        // Respondemos 404 también si no pertenece al usuario, para no revelar su existencia.
+        if (!esAdminOperador && !Objects.equals(pedido.getCliente(), cliente)) {
+            return ResponseEntity.notFound().build();
+        }
+
         return ResponseEntity.ok(pedido);
     }
 
@@ -99,16 +113,13 @@ public class OrderController {
      * - 403: el usuario no tiene permiso
      * - 404: el pedido no existe
      *
-     * Nota sobre el header Authorization:
-     * Lo leemos manualmente del request para poder reenviárselo a catalog-service
-     * cuando el nuevo estado es "ACEPTADO" y hay que descontar stock.
+     * El servicio de pedidos usa una credencial interna para comunicarse con el catálogo.
      */
     @PutMapping("/{id}/status")
     public ResponseEntity<Order> cambiarEstado(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable Long id,
-            @RequestBody Map<String, String> body,
-            @RequestHeader("Authorization") String authorizationHeader) {
+            @RequestBody Map<String, String> body) {
 
         // Verificamos que el usuario sea Admin u Operador
         List<String> roles = jwt.getClaimAsStringList("roles");
@@ -123,7 +134,7 @@ public class OrderController {
         String nuevoEstado = body.get("estado");
 
         try {
-            Order pedido = orderService.cambiarEstado(id, nuevoEstado, authorizationHeader);
+            Order pedido = orderService.cambiarEstado(id, nuevoEstado);
 
             // Si el pedido no existía, el service retorna null
             if (pedido == null) {

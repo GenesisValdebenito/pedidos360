@@ -87,6 +87,11 @@ Archivo objetivo:
    - `DB_USERNAME`
    - `DB_PASSWORD`
 
+### Paso 4: configurar la credencial interna entre servicios
+1. Genera un valor secreto largo y aleatorio para `PEDIDOS360_INTERNAL_TOKEN`.
+2. Configura el mismo valor en el entorno de `orders-service` y `catalog-service`.
+3. No lo incluyas en Git ni lo uses en Angular. El endpoint de descuento de stock lo valida para aceptar llamadas internas.
+
 ### Resultado final esperado
 ```properties
 spring.application.name=orders-service
@@ -99,6 +104,7 @@ spring.datasource.username=${DB_USERNAME}
 spring.datasource.password=${DB_PASSWORD}
 spring.jpa.hibernate.ddl-auto=update
 spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.PostgreSQLDialect
+pedidos360.catalog.internal-token=${PEDIDOS360_INTERNAL_TOKEN}
 ```
 
 ---
@@ -108,7 +114,11 @@ spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.PostgreSQLDialect
 Archivo objetivo:
 - `backend/catalog-service/src/main/resources/application.properties`
 
-Sigue exactamente los mismos pasos que en orders-service, con los valores reales de la API y la base de datos.
+Sigue exactamente los mismos pasos que en orders-service, con los valores reales de la API y la base de datos. Añade también:
+
+```properties
+pedidos360.internal-token=${PEDIDOS360_INTERNAL_TOKEN}
+```
 
 ---
 
@@ -137,9 +147,26 @@ $env:DB_PORT="6543"
 $env:DB_NAME="postgres"
 $env:DB_USERNAME="postgres.TU_USUARIO"
 $env:DB_PASSWORD="TU_PASSWORD_REAL"
+$env:PEDIDOS360_INTERNAL_TOKEN="UN_SECRETO_LARGO_Y_ALEATORIO_COMPARTIDO"
 ```
 
 Luego el proyecto puede leer esas variables sin guardar secretos en el código.
+
+### Paso 5: configurar RabbitMQ
+Para desarrollo local, levanta el broker desde la raíz del repositorio con `docker compose up -d`. El archivo `docker-compose.yml` usa credenciales locales de desarrollo y publica los puertos solo en `127.0.0.1`.
+
+Si necesitas cambiar las credenciales locales, define `RABBITMQ_USERNAME` y `RABBITMQ_PASSWORD` antes de iniciar Docker Compose y configura los mismos valores para los servicios Spring Boot.
+
+Para ejecutar `orders-service`, agrega las siguientes propiedades a su `application.properties` local existente; no reemplaces la configuración de Entra ID ni de Supabase. Para `notifications-service`, copia su `application-example.properties` como `application.properties`. RabbitMQ se configura mediante:
+
+- `RABBITMQ_HOST` (local: `localhost`; en EC2 si RabbitMQ está en la misma instancia: `localhost`)
+- `RABBITMQ_PORT` (local: `5672`)
+- `RABBITMQ_USERNAME`
+- `RABBITMQ_PASSWORD`
+
+La consola de administración local se encuentra en `http://localhost:15672`. No expongas los puertos de RabbitMQ a Internet; en EC2 el broker debe permanecer accesible solo desde la instancia. El envío se realiza después del commit del pedido; si RabbitMQ no está disponible, el pedido se conserva y queda un error explícito en los logs, pero la notificación no se encola.
+
+La configuración local usa el mismo usuario y contraseña de desarrollo que el `docker-compose.yml`. En EC2 define credenciales propias mediante variables de entorno; no reutilices las credenciales locales.
 
 ---
 

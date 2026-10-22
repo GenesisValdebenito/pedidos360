@@ -14,7 +14,8 @@ Evaluaciones: **EP1 — Encargo (16%)** + **EP2 — Presentación (24%)**
 Pedidos360 es un sistema que permite gestionar pedidos y catálogo de productos, integrando:
 
 - **Frontend:** Angular + MSAL (login con Microsoft Entra ID)
-- **Backend:** Microservicios en Spring Boot (Pedidos y Catálogo), desplegados en AWS EC2
+- **Backend:** Microservicios en Spring Boot (Pedidos, Catálogo y Notificaciones), desplegados en AWS EC2
+- **Mensajería:** RabbitMQ para procesar notificaciones de pedidos de forma asíncrona
 - **Gateway:** AWS API Gateway con validación JWT y CORS
 - **Persistencia:** Base de datos cloud
 
@@ -32,8 +33,8 @@ AWS API GATEWAY  (JWT Authorizer + CORS)
 SPRING BOOT + SPRING SECURITY
   ↓
 PEDIDOS + CATÁLOGO
-  ↓
-BASE DE DATOS CLOUD
+  ├─→ BASE DE DATOS CLOUD
+  └─→ RabbitMQ → notifications-service
 ```
 
 ## 3. Estructura del repositorio
@@ -43,7 +44,9 @@ pedidos360-dsy1107/
 ├── frontend/              # Angular + MSAL
 ├── backend/
 │   ├── orders-service/    # Gestión de Pedidos
-│   └── catalog-service/   # Catálogo / Stock
+│   ├── catalog-service/   # Catálogo / Stock
+│   └── notifications-service/ # Consumidor RabbitMQ
+├── docker-compose.yml     # RabbitMQ local
 ├── docs/                  # Diagramas y capturas de arquitectura
 ├── .gitignore
 └── README.md
@@ -53,13 +56,22 @@ pedidos360-dsy1107/
 
 ### 4.1 Gestión de Pedidos
 - Crear, listar y consultar pedidos.
-- Cambiar estado: `CREADO → ACEPTADO → EN_PREPARACIÓN → DESPACHADO → ENTREGADO` (o `CANCELADO`).
-- Regla de negocio: un pedido **no puede pasar a DESPACHADO** sin haber pasado antes por **ACEPTADO**.
+- Cambiar estado siguiendo esta secuencia: `CREADO → ACEPTADO → EN_PREPARACION → DESPACHADO → ENTREGADO`.
+- Un pedido solo se puede cancelar mientras está en `CREADO`; `CANCELADO` y `ENTREGADO` son estados finales.
+- El stock se descuenta una sola vez, al aceptar un pedido que estaba en `CREADO`.
+- Admin y Operador pueden consultar cualquier pedido; Cliente solo puede consultar pedidos propios.
 
 ### 4.2 Catálogo de Productos / Stock
 - Listar productos disponibles.
 - Crear y editar productos (solo Admin).
 - Regla de negocio: al **aceptar** un pedido, el **stock disminuye** según los productos del pedido.
+- El endpoint interno de descuento requiere una credencial compartida entre `orders-service` y `catalog-service`, configurada en `PEDIDOS360_INTERNAL_TOKEN`.
+
+### 4.3 Notificaciones asíncronas
+- `orders-service` publica un evento después de guardar un pedido creado o un cambio de estado válido.
+- RabbitMQ enruta los eventos mediante `pedidos360.direct.exchange` y routing keys como `pedido.creado` y `pedido.aceptado`.
+- `notifications-service` consume `notificaciones.queue` y registra el evento en sus logs. La validación de stock continúa siendo síncrona.
+- En esta iteración no se incluyen DLQ ni ACK manual; se mantienen para la siguiente etapa de confiabilidad de mensajería.
 
 ## 5. Roles y permisos
 
@@ -103,9 +115,12 @@ Copia los archivos de ejemplo sin secretos y completa tus valores reales en tu e
 - Frontend:
   - copiar `frontend/src/environments/environment.example.ts` a `frontend/src/environments/environment.ts`
 - Backend orders-service:
-  - copiar `backend/orders-service/src/main/resources/application-example.properties` a `backend/orders-service/src/main/resources/application.properties`
+  - si todavía no existe, copiar `backend/orders-service/src/main/resources/application-example.properties` a `backend/orders-service/src/main/resources/application.properties`
+  - si ya existe, conservar sus valores locales y agregarle las propiedades nuevas indicadas en el ejemplo
 - Backend catalog-service:
-  - copiar `backend/catalog-service/src/main/resources/application-example.properties` a `backend/catalog-service/src/main/resources/application.properties`
+  - si todavía no existe, copiar `backend/catalog-service/src/main/resources/application-example.properties` a `backend/catalog-service/src/main/resources/application.properties`
+- Backend notifications-service:
+  - copiar `backend/notifications-service/src/main/resources/application-example.properties` a `backend/notifications-service/src/main/resources/application.properties`
 
 También puedes usar variables de entorno del sistema, por ejemplo:
 - `AZURE_TENANT_ISSUER_URI`
@@ -115,8 +130,21 @@ También puedes usar variables de entorno del sistema, por ejemplo:
 - `DB_NAME`
 - `DB_USERNAME`
 - `DB_PASSWORD`
+- `PEDIDOS360_INTERNAL_TOKEN`
+- `RABBITMQ_HOST`
+- `RABBITMQ_PORT`
+- `RABBITMQ_USERNAME`
+- `RABBITMQ_PASSWORD`
 
-### 2) Ejecutar frontend (Angular)
+### 2) Levantar RabbitMQ local
+Desde la raíz del repositorio:
+```powershell
+docker compose up -d
+docker compose ps
+```
+RabbitMQ debe aparecer como activo/healthy. La consola de administración queda en http://localhost:15672; los puertos AMQP y de administración están enlazados solo a la interfaz local.
+
+### 3) Ejecutar frontend (Angular)
 ```bash
 cd frontend
 npm install
@@ -129,27 +157,35 @@ npx ng serve
 ```
 La app quedará disponible en http://localhost:4200
 
-### 3) Ejecutar backend (Spring Boot)
-En terminal 1:
-```bash
-cd backend/orders-service
-./mvnw spring-boot:run
+### 4) Ejecutar backend (Spring Boot)
+Primero agrega las propiedades de RabbitMQ del archivo `application-example.properties` a tu `application.properties` local de `orders-service`, sin reemplazar las credenciales existentes. Copia `backend/notifications-service/src/main/resources/application-example.properties` a `application.properties` dentro de `notifications-service`.
+
+En PowerShell, inicia RabbitMQ y luego abre terminales separadas:
+```powershell
+cd backend\notifications-service
+mvn spring-boot:run
 ```
-En terminal 2:
-```bash
-cd backend/catalog-service
-./mvnw spring-boot:run
+```powershell
+cd backend\orders-service
+.\mvnw.cmd spring-boot:run
+```
+```powershell
+cd backend\catalog-service
+.\mvnw.cmd spring-boot:run
 ```
 Los microservicios quedarán disponibles en:
 - Orders: http://localhost:8081
 - Catalog: http://localhost:8082
+- Notifications: consumidor sin endpoint HTTP
 
-### 4) Verificar salud inicial
+Inicia RabbitMQ y `notifications-service` antes de publicar pedidos para que se creen la cola y sus bindings. En AWS EC2, ejecuta RabbitMQ en la misma instancia y configura `RABBITMQ_HOST=localhost`; no abras los puertos del broker en el Security Group.
+
+### 5) Verificar salud inicial
 - Frontend: abrir http://localhost:4200
 - Orders service: http://localhost:8081/actuator/health (si está habilitado)
 - Catalog service: http://localhost:8082/actuator/health (si está habilitado)
 
-### 5) Recomendaciones de seguridad
+### 6) Recomendaciones de seguridad
 - Nunca subir archivos con credenciales reales ni conexiones a BD al repositorio.
 - Mantener `application.properties` y `environment.ts` locales y no versionados.
 - Usar `.env` o variables de entorno del sistema para valores sensibles.

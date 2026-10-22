@@ -2,12 +2,17 @@ package com.pedidos360.orders_service.service;
 
 import com.pedidos360.orders_service.model.Order;
 import com.pedidos360.orders_service.repository.OrderRepository;
+import com.pedidos360.orders_service.messaging.PedidoEvento;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -28,9 +33,18 @@ public class OrderService {
      */
     private final RestTemplate restTemplate;
 
-    public OrderService(OrderRepository orderRepository, RestTemplate restTemplate) {
+    private final String tokenInternoCatalogo;
+    private final ApplicationEventPublisher eventPublisher;
+
+    public OrderService(
+            OrderRepository orderRepository,
+            RestTemplate restTemplate,
+            @Value("${pedidos360.catalog.internal-token}") String tokenInternoCatalogo,
+            ApplicationEventPublisher eventPublisher) {
         this.orderRepository = orderRepository;
         this.restTemplate = restTemplate;
+        this.tokenInternoCatalogo = tokenInternoCatalogo;
+        this.eventPublisher = eventPublisher;
     }
 
     /**
@@ -38,10 +52,13 @@ public class OrderService {
      * Recibe el pedido con productoId y cantidad, le asigna el cliente (del JWT)
      * y el estado inicial "CREADO", y lo guarda en la base de datos.
      */
+    @Transactional
     public Order crear(Order pedido, String cliente) {
         pedido.setCliente(cliente);   // El cliente viene del token JWT, no del body
         pedido.setEstado("CREADO");   // Estado inicial siempre es CREADO
-        return orderRepository.save(pedido);
+        Order guardado = orderRepository.save(pedido);
+        publicarEvento(guardado);
+        return guardado;
     }
 
     /**
@@ -68,37 +85,54 @@ public class OrderService {
     }
 
     /**
-     * Cambia el estado de un pedido, aplicando reglas de negocio.
-     *
-     * Recibe el token de autorización del usuario para poder reenviarlo
-     * a catalog-service cuando necesite descontar stock.
-     *
-     * Reglas:
-     * - Si el nuevo estado es "DESPACHADO", el pedido DEBE estar en estado "ACEPTADO" primero.
-     * - Si el nuevo estado es "ACEPTADO", se descuenta el stock en catalog-service via HTTP.
+     * Cambia el estado solo si el paso está permitido.
+     * El stock se descuenta únicamente al pasar de CREADO a ACEPTADO.
      */
-    public Order cambiarEstado(Long id, String nuevoEstado, String authorizationHeader) {
-        // Buscamos el pedido. Si no existe, retornamos null.
-        Order pedido = orderRepository.findById(id).orElse(null);
+    @Transactional
+    public Order cambiarEstado(Long id, String nuevoEstado) {
+        // Bloqueamos el pedido para que dos solicitudes no procesen el mismo cambio a la vez.
+        Order pedido = orderRepository.findByIdParaActualizar(id).orElse(null);
         if (pedido == null) {
             return null;
         }
 
-        // Regla de negocio: para DESPACHAR un pedido, primero debe haber sido ACEPTADO.
-        // Si intentan saltar ese paso, lanzamos una excepción que el Controller capturará.
-        if ("DESPACHADO".equals(nuevoEstado) && !"ACEPTADO".equals(pedido.getEstado())) {
-            throw new RuntimeException("No se puede despachar sin antes aceptar el pedido");
+        if (!esTransicionPermitida(pedido.getEstado(), nuevoEstado)) {
+            throw new RuntimeException("La transición de estado solicitada no está permitida");
         }
 
-        // Si el nuevo estado es ACEPTADO, debemos descontar el stock en catalog-service.
-        // Esto es una llamada HTTP de un microservicio a otro.
-        if ("ACEPTADO".equals(nuevoEstado)) {
-            descontarStockEnCatalog(pedido.getProductoId(), pedido.getCantidad(), authorizationHeader);
+        // Solo se descuenta stock una vez: al aceptar un pedido que estaba CREADO.
+        if ("CREADO".equals(pedido.getEstado()) && "ACEPTADO".equals(nuevoEstado)) {
+            descontarStockEnCatalog(pedido.getProductoId(), pedido.getCantidad());
         }
 
         // Actualizamos el estado y guardamos en base de datos
         pedido.setEstado(nuevoEstado);
-        return orderRepository.save(pedido);
+        Order guardado = orderRepository.save(pedido);
+        publicarEvento(guardado);
+        return guardado;
+    }
+
+    private void publicarEvento(Order pedido) {
+        PedidoEvento evento = new PedidoEvento(
+                pedido.getId(),
+                pedido.getEstado(),
+                pedido.getCliente(),
+                LocalDateTime.now());
+        eventPublisher.publishEvent(evento);
+    }
+
+    private boolean esTransicionPermitida(String estadoActual, String nuevoEstado) {
+        if (estadoActual == null || nuevoEstado == null) {
+            return false;
+        }
+
+        return switch (estadoActual) {
+            case "CREADO" -> "ACEPTADO".equals(nuevoEstado) || "CANCELADO".equals(nuevoEstado);
+            case "ACEPTADO" -> "EN_PREPARACION".equals(nuevoEstado);
+            case "EN_PREPARACION" -> "DESPACHADO".equals(nuevoEstado);
+            case "DESPACHADO" -> "ENTREGADO".equals(nuevoEstado);
+            default -> false;
+        };
     }
 
     /**
@@ -109,10 +143,8 @@ public class OrderService {
      * Este método hace una petición HTTP de orders-service hacia catalog-service.
      * Es como si orders-service fuera el "cliente" de catalog-service.
      *
-     * ¿Por qué reenviamos el header Authorization?
-     * catalog-service también valida el JWT en cada petición. Si no enviamos
-     * el token del usuario original, catalog-service rechazará la llamada con 401.
-     * Por eso "pasamos" el mismo token que recibimos nosotros del frontend.
+     * La llamada usa una credencial interna compartida por ambos servicios.
+     * Así, un usuario con un JWT válido no puede descontar stock directamente.
      *
      * ¿Cómo funciona RestTemplate?
      * 1. Construimos los headers HTTP (incluyendo Authorization: Bearer <token>)
@@ -123,17 +155,15 @@ public class OrderService {
      *    - Los headers
      *    - El tipo de respuesta esperada (Void = no nos importa el body)
      */
-    private void descontarStockEnCatalog(Long productoId, int cantidad, String authorizationHeader) {
+    private void descontarStockEnCatalog(Long productoId, int cantidad) {
         // Construimos la URL del endpoint de catalog-service
         String url = "http://localhost:8082/api/catalog/products/" + productoId + "/descontar-stock?cantidad=" + cantidad;
 
-        // Preparamos los headers HTTP para la petición saliente
+        // El catálogo valida este token antes de modificar el stock.
         HttpHeaders headers = new HttpHeaders();
-        // Reenviamos el mismo token JWT que recibimos nosotros del frontend
-        headers.set("Authorization", authorizationHeader);
+        headers.set("X-Internal-Service-Token", tokenInternoCatalogo);
 
-        // HttpEntity es el "sobre" que contiene los headers (y opcionalmente un body)
-        // Como este PUT no envía body, ponemos null como body
+        // Este PUT no envía body; la cantidad ya va en la URL.
         HttpEntity<Void> requestEntity = new HttpEntity<>(null, headers);
 
         // Hacemos la llamada HTTP a catalog-service
