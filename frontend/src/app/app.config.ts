@@ -33,8 +33,8 @@ export function MSALInstanceFactory(): IPublicClientApplication {
     auth: {
       clientId: environment.clientId,
       authority: environment.authority,
-      redirectUri: environment.redirectUri,
-      postLogoutRedirectUri: environment.redirectUri
+      redirectUri: window.location.origin,
+      postLogoutRedirectUri: window.location.origin
     },
     cache: {
       cacheLocation: BrowserCacheLocation.LocalStorage
