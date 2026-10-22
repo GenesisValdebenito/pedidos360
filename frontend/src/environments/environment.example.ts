@@ -1,8 +1,8 @@
 export const environment = {
   production: false,
-  clientId: 'YOUR_MICROSOFT_APP_CLIENT_ID',
-  authority: 'https://login.microsoftonline.com/YOUR_TENANT_ID',
+  clientId: 'cc4f204e-d04c-4a4f-ba8a-111dd2759b9b',
+  authority: 'https://login.microsoftonline.com/389f04aa-4dbb-465f-b763-e194c3cca019',
   redirectUri: 'http://localhost:4200',
-  apiScope: 'api://YOUR_API_APP_ID/Pedidos.Read',
-  apiUrl: 'https://YOUR_API_GATEWAY_URL.execute-api.us-east-1.amazonaws.com'
+  apiScope: 'api://7372a7c9-5660-4be1-8bcb-a30647aea56b/Pedidos.Read',
+  apiUrl: 'https://r5qzahr13b.execute-api.us-east-1.amazonaws.com'
 };

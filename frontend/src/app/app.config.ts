@@ -21,7 +21,7 @@ import {
 } from '@azure/msal-angular';
 
 import { routes } from './app.routes';
-import { environment } from '../environments/environment';
+import { environment } from '../environments/environment.example';
 
 export function loggerCallback(logLevel: LogLevel, message: string) {
   // Opcional: logs de depuración de MSAL
