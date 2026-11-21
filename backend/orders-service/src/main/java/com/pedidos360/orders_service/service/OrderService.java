@@ -34,16 +34,26 @@ public class OrderService {
     private final RestTemplate restTemplate;
 
     private final String tokenInternoCatalogo;
+
+    /**
+     * URL base de catalog-service. Se externaliza para poder apuntar a un
+     * host distinto cuando orders y catalog corren en máquinas separadas (EC2).
+     * Por defecto sigue siendo http://localhost:8082 para el entorno local.
+     */
+    private final String urlCatalog;
+
     private final ApplicationEventPublisher eventPublisher;
 
     public OrderService(
             OrderRepository orderRepository,
             RestTemplate restTemplate,
             @Value("${pedidos360.catalog.internal-token}") String tokenInternoCatalogo,
+            @Value("${pedidos360.catalog.url:http://localhost:8082}") String urlCatalog,
             ApplicationEventPublisher eventPublisher) {
         this.orderRepository = orderRepository;
         this.restTemplate = restTemplate;
         this.tokenInternoCatalogo = tokenInternoCatalogo;
+        this.urlCatalog = urlCatalog;
         this.eventPublisher = eventPublisher;
     }
 
@@ -156,8 +166,11 @@ public class OrderService {
      *    - El tipo de respuesta esperada (Void = no nos importa el body)
      */
     private void descontarStockEnCatalog(Long productoId, int cantidad) {
-        // Construimos la URL del endpoint de catalog-service
-        String url = "http://localhost:8082/api/catalog/products/" + productoId + "/descontar-stock?cantidad=" + cantidad;
+        // Construimos la URL del endpoint de catalog-service.
+        // La base (urlCatalog) es configurable: localhost en desarrollo,
+        // o el host real si los servicios están en EC2 separadas.
+        String url = urlCatalog + "/api/catalog/products/" + productoId
+                + "/descontar-stock?cantidad=" + cantidad;
 
         // El catálogo valida este token antes de modificar el stock.
         HttpHeaders headers = new HttpHeaders();

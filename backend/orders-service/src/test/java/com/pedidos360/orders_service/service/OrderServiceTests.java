@@ -39,7 +39,8 @@ class OrderServiceTests {
 
     @BeforeEach
     void configurar() {
-        orderService = new OrderService(orderRepository, restTemplate, "secreto-de-prueba", eventPublisher);
+        orderService = new OrderService(orderRepository, restTemplate, "secreto-de-prueba",
+                "http://localhost:8082", eventPublisher);
         pedido = new Order(1L, "cliente@ejemplo.com", "CREADO", 20L, 2);
     }
 
