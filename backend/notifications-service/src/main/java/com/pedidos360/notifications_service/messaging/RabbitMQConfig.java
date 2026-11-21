@@ -15,6 +15,11 @@ public class RabbitMQConfig {
     public static final String EXCHANGE = "pedidos360.direct.exchange";
     public static final String NOTIFICACIONES_QUEUE = "notificaciones.queue";
 
+    // Dead Letter Exchange / Queue: a dónde van los mensajes que fallan.
+    public static final String NOTIFICACIONES_DLX = "pedidos360.direct.dlx";
+    public static final String NOTIFICACIONES_DLQ = "notificaciones.dlq";
+    public static final String DLQ_ROUTING_KEY = "notificacion.fallida";
+
     public static final String PEDIDO_CREADO = "pedido.creado";
     public static final String PEDIDO_ACEPTADO = "pedido.aceptado";
     public static final String PEDIDO_EN_PREPARACION = "pedido.en_preparacion";
@@ -29,9 +34,36 @@ public class RabbitMQConfig {
                 .build();
     }
 
+    /**
+     * Cola principal de notificaciones. Está suscrita al DLX: cuando un
+     * mensaje recibe un NACK con requeue=false (o expira/rechaza), RabbitMQ
+     * lo reenvía automáticamente a NOTIFICACIONES_DLX.
+     */
     @Bean
     public Queue notificacionesQueue() {
-        return QueueBuilder.durable(NOTIFICACIONES_QUEUE).build();
+        return QueueBuilder.durable(NOTIFICACIONES_QUEUE)
+                .withArgument("x-dead-letter-exchange", NOTIFICACIONES_DLX)
+                .withArgument("x-dead-letter-routing-key", DLQ_ROUTING_KEY)
+                .build();
+    }
+
+    /** Dead Letter Exchange que recibe los mensajes fallidos. */
+    @Bean
+    public DirectExchange pedidosDlx() {
+        return ExchangeBuilder.directExchange(NOTIFICACIONES_DLX)
+                .durable(true)
+                .build();
+    }
+
+    /** Dead Letter Queue: aquí quedan los mensajes que no se pudieron procesar. */
+    @Bean
+    public Queue notificacionesDlq() {
+        return QueueBuilder.durable(NOTIFICACIONES_DLQ).build();
+    }
+
+    @Bean
+    public Binding notificacionesDlqBinding(Queue notificacionesDlq, DirectExchange pedidosDlx) {
+        return BindingBuilder.bind(notificacionesDlq).to(pedidosDlx).with(DLQ_ROUTING_KEY);
     }
 
     @Bean
