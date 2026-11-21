@@ -48,3 +48,4 @@ backend/**/application-secrets.properties
 !**/application-example.properties
 **/environment*.ts
 !**/environment.example.ts
+!**/environment.shared.ts

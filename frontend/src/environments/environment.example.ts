@@ -1,8 +1,18 @@
+/**
+ * Plantilla de configuración del frontend.
+ *
+ * Cómo usarla (entrega reproducible sin secretos):
+ *   1. Copiar este archivo a src/environments/environment.ts
+ *   2. Reemplazar los placeholders YOUR_* por los valores reales.
+ *
+ * environment.ts está excluido del repositorio (.gitignore), por lo que
+ * nunca se publican credenciales ni URLs internas.
+ */
+import { environmentBase } from './environment.shared';
+
 export const environment = {
-  production: false,
-  clientId: 'cc4f204e-d04c-4a4f-ba8a-111dd2759b9b',
-  authority: 'https://login.microsoftonline.com/389f04aa-4dbb-465f-b763-e194c3cca019',
-  redirectUri: 'https://192.168.1.86:4200',
-  apiScope: 'api://7372a7c9-5660-4be1-8bcb-a30647aea56b/Pedidos.Read',
-  apiUrl: 'https://r5qzahr13b.execute-api.us-east-1.amazonaws.com'
+  ...environmentBase,
+  // URL base del API Gateway (SIN el sufijo /api: el interceptor y los
+  // componentes ya agregan /api en cada llamado).
+  apiUrl: environmentBase.gatewayUrl
 };

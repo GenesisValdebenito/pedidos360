@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { MsalService } from '@azure/msal-angular';
-import { environment } from '../../environments/environment.example';
+import { environment } from '../../environments/environment';
 
 @Component({
     selector: 'app-orders',

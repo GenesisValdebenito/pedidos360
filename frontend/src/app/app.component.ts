@@ -15,7 +15,7 @@ import {
   AuthenticationResult,
   RedirectRequest
 } from '@azure/msal-browser';
-import { environment } from '../environments/environment.example';
+import { environment } from '../environments/environment';
 
 @Component({
   selector: 'app-root',
