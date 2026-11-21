@@ -70,8 +70,9 @@ pedidos360-dsy1107/
 ### 4.3 Notificaciones asíncronas
 - `orders-service` publica un evento después de guardar un pedido creado o un cambio de estado válido.
 - RabbitMQ enruta los eventos mediante `pedidos360.direct.exchange` y routing keys como `pedido.creado` y `pedido.aceptado`.
-- `notifications-service` consume `notificaciones.queue` y registra el evento en sus logs. La validación de stock continúa siendo síncrona.
-- En esta iteración no se incluyen DLQ ni ACK manual; se mantienen para la siguiente etapa de confiabilidad de mensajería.
+- `notifications-service` consume `notificaciones.queue` con **ACK manual** (`basicAck`/`basicNack`) y registra el evento en sus logs. La validación de stock continúa siendo síncrona.
+- Si el procesamiento falla, el consumidor hace `basicNack(requeue=false)` y el mensaje cae en la **DLQ** (`notificaciones.dlq`) a través del DLX `pedidos360.direct.dlx`.
+- El endpoint de administración `POST /api/queues` y `DELETE /api/queues/{name}` permite crear y eliminar colas en caliente.
 
 ## 5. Roles y permisos
 
@@ -114,6 +115,8 @@ Copia los archivos de ejemplo sin secretos y completa tus valores reales en tu e
 
 - Frontend:
   - copiar `frontend/src/environments/environment.example.ts` a `frontend/src/environments/environment.ts`
+  - `environment.example.ts` solo contiene placeholders (`YOUR_CLIENT_ID`, `YOUR_TENANT_ID`, `YOUR_API_GATEWAY_URL`, etc.); reemplázalos por tus valores reales en `environment.ts`
+  - `environment.ts` está excluido del repositorio (`.gitignore`), por lo que las credenciales nunca se publican
 - Backend orders-service:
   - si todavía no existe, copiar `backend/orders-service/src/main/resources/application-example.properties` a `backend/orders-service/src/main/resources/application.properties`
   - si ya existe, conservar sus valores locales y agregarle las propiedades nuevas indicadas en el ejemplo
@@ -131,6 +134,7 @@ También puedes usar variables de entorno del sistema, por ejemplo:
 - `DB_USERNAME`
 - `DB_PASSWORD`
 - `PEDIDOS360_INTERNAL_TOKEN`
+- `PEDIDOS360_CATALOG_URL` (opcional; por defecto `http://localhost:8082`)
 - `RABBITMQ_HOST`
 - `RABBITMQ_PORT`
 - `RABBITMQ_USERNAME`
@@ -230,6 +234,9 @@ Inicia RabbitMQ y `notifications-service` antes de publicar pedidos para que se 
 | Pedidos + Catálogo | **EP1 (actual)** |
 | Notificaciones (RabbitMQ) | EP2 |
 | Reportería y Auditoría (Kafka) | EP3 |
+
+> El detalle del contraste con EP3 y de las clases/pruebas pendientes está en
+> `docs/contraste-ep3-kafka.md`.
 
 ---
 
