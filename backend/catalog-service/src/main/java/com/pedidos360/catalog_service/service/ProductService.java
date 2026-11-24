@@ -1,5 +1,6 @@
 package com.pedidos360.catalog_service.service;
 
+import com.pedidos360.catalog_service.messaging.StockKafkaProducer;
 import com.pedidos360.catalog_service.model.Product;
 import com.pedidos360.catalog_service.repository.ProductRepository;
 import org.springframework.stereotype.Service;
@@ -21,8 +22,15 @@ public class ProductService {
     // Spring lo inyecta automáticamente gracias al constructor.
     private final ProductRepository productRepository;
 
-    public ProductService(ProductRepository productRepository) {
+    /*
+     * Publica en Kafka el stock actual cada vez que un producto cambia.
+     * Se inyecta por constructor igual que el repositorio.
+     */
+    private final StockKafkaProducer stockKafkaProducer;
+
+    public ProductService(ProductRepository productRepository, StockKafkaProducer stockKafkaProducer) {
         this.productRepository = productRepository;
+        this.stockKafkaProducer = stockKafkaProducer;
     }
 
     /**
@@ -47,7 +55,9 @@ public class ProductService {
      * Equivale a un INSERT INTO product.
      */
     public Product agregar(Product producto) {
-        return productRepository.save(producto);
+        Product guardado = productRepository.save(producto);
+        stockKafkaProducer.publicar(guardado);
+        return guardado;
     }
 
     /**
@@ -70,7 +80,9 @@ public class ProductService {
         productoExistente.setStock(productoActualizado.getStock());
 
         // Guardamos los cambios en la base de datos y retornamos el producto actualizado
-        return productRepository.save(productoExistente);
+        Product guardado = productRepository.save(productoExistente);
+        stockKafkaProducer.publicar(guardado);
+        return guardado;
     }
 
     /**
@@ -93,6 +105,7 @@ public class ProductService {
         producto.setStock(producto.getStock() - cantidad);
 
         // Guardamos el nuevo stock en la base de datos
-        productRepository.save(producto);
+        Product guardado = productRepository.save(producto);
+        stockKafkaProducer.publicar(guardado);
     }
 }
