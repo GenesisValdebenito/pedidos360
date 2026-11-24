@@ -2,7 +2,7 @@
 
 Sistema de gestión de pedidos y catálogo con arquitectura cloud native.
 Proyecto académico — **DSY1107 · Desarrollo Cloud Native I**
-Evaluaciones: **EP1 — Encargo (16%)** + **EP2 — Presentación (24%)**
+Evaluaciones: **EP1 — Encargo (16%)**, **EP2 — Presentación (24%)** y **EP3 — Reportería y Auditoría con Kafka**
 
 **Autora:** @GenesisValdebenito
 **Trabajo:** Individual
@@ -14,8 +14,8 @@ Evaluaciones: **EP1 — Encargo (16%)** + **EP2 — Presentación (24%)**
 Pedidos360 es un sistema que permite gestionar pedidos y catálogo de productos, integrando:
 
 - **Frontend:** Angular + MSAL (login con Microsoft Entra ID)
-- **Backend:** Microservicios en Spring Boot (Pedidos, Catálogo y Notificaciones), desplegados en AWS EC2
-- **Mensajería:** RabbitMQ para procesar notificaciones de pedidos de forma asíncrona
+- **Backend:** Microservicios en Spring Boot (Pedidos, Catálogo, Notificaciones, Reportería y Administración de Kafka), desplegados en AWS EC2
+- **Mensajería:** RabbitMQ para notificaciones de pedidos y Kafka para reportería y auditoría
 - **Gateway:** AWS API Gateway con validación JWT y CORS
 - **Persistencia:** Base de datos cloud
 
@@ -34,20 +34,34 @@ SPRING BOOT + SPRING SECURITY
   ↓
 PEDIDOS + CATÁLOGO
   ├─→ BASE DE DATOS CLOUD
-  └─→ RabbitMQ → notifications-service
+  ├─→ RabbitMQ → notifications-service
+  └─→ Kafka
+        ├─ pedidos.eventos → reporteria-group   (KPIs)
+        └─ pedidos.eventos / stock.eventos
+              → auditoria-group                (auditoría + stock)
+                    ↓
+             reporting-service (reportes HTTP)
 ```
 
 ## 3. Estructura del repositorio
 
 ```
 pedidos360-dsy1107/
-├── frontend/              # Angular + MSAL
+├── frontend/                    # Angular + MSAL
 ├── backend/
-│   ├── orders-service/    # Gestión de Pedidos
-│   ├── catalog-service/   # Catálogo / Stock
-│   └── notifications-service/ # Consumidor RabbitMQ
-├── docker-compose.yml     # RabbitMQ local
-├── docs/                  # Diagramas y capturas de arquitectura
+│   ├── orders-service/          # Gestión de Pedidos (publica en RabbitMQ y Kafka)
+│   ├── catalog-service/         # Catálogo / Stock (publica en Kafka)
+│   ├── notifications-service/   # Consumidor RabbitMQ
+│   ├── reporting-service/       # KPIs, auditoría y stock desde Kafka
+│   └── kafka-admin-service/     # Administración de tópicos y grupos
+├── infra/
+│   ├── docker-compose.yml       # 3 ZooKeeper + 3 brokers + Kafka UI
+│   ├── .env.example
+│   ├── ec2/                     # variables de entorno para EC2
+│   ├── systemd/                 # unidad pedidos360@.service
+│   └── scripts/                 # creación de tópicos y despliegue
+├── docker-compose.yml           # RabbitMQ local
+├── docs/                        # Guías, diagramas y documentación de defensa
 ├── .gitignore
 └── README.md
 ```
@@ -74,6 +88,23 @@ pedidos360-dsy1107/
 - Si el procesamiento falla, el consumidor hace `basicNack(requeue=false)` y el mensaje cae en la **DLQ** (`notificaciones.dlq`) a través del DLX `pedidos360.direct.dlx`.
 - El endpoint de administración `POST /api/queues` y `DELETE /api/queues/{name}` permite crear y eliminar colas en caliente.
 
+### 4.4 Reportería y auditoría con Kafka
+- `orders-service` publica en `pedidos.eventos` después del commit, con clave `pedidoId`.
+- `catalog-service` publica en `stock.eventos` después de cada cambio de stock, con clave `productoId`.
+- `reporting-service` consume con dos grupos independientes:
+  - `reporteria-group`: KPIs de pedidos y unidades.
+  - `auditoria-group`: línea de tiempo de pedidos y último stock por producto.
+- Los tópicos tienen 3 particiones y factor de réplica 3. `pedidos.eventos` usa retención de 7 días y `stock.eventos` es compactado.
+- Los reportes se consultan en `GET /api/reportes/kpis`, `/api/reportes/auditoria` y `/api/reportes/stock`.
+
+### 4.5 Administración de Kafka
+- `kafka-admin-service` usa `AdminClient` para crear, listar, describir, modificar y eliminar tópicos.
+- `GET /api/kafka/grupos` muestra los consumer groups con su offset actual, offset final y lag.
+- Solo el rol Admin puede administrar tópicos.
+- La infraestructura local está en `infra/`: 3 ZooKeeper, 3 brokers y Kafka UI.
+
+> Guía completa de Kafka, operación, pruebas y defensa: [docs/kafka-guia.md](docs/kafka-guia.md).
+
 ## 5. Roles y permisos
 
 | Acción | Admin | Operador | Cliente |
@@ -85,6 +116,8 @@ pedidos360-dsy1107/
 | Cambiar estado de pedido | Opcional | Sí | No |
 | Crear/editar producto | Sí | No | No |
 | Administrar stock | Sí | No | No |
+| Ver KPIs, auditoría y stock | Sí | Sí | No |
+| Administrar tópicos y ver lag en Kafka | Sí | No | No |
 
 ## 6. Endpoints principales
 
@@ -99,6 +132,20 @@ CATÁLOGO
 GET    /api/catalog/products
 POST   /api/catalog/products
 PUT    /api/catalog/products/{id}
+
+REPORTES (Admin/Operador)
+GET    /api/reportes/kpis
+GET    /api/reportes/auditoria?limite=50
+GET    /api/reportes/stock
+GET    /api/reportes/stock/{productoId}
+
+ADMINISTRACIÓN DE KAFKA (Admin)
+POST   /api/kafka/topicos
+GET    /api/kafka/topicos
+GET    /api/kafka/topicos/{nombre}
+PUT    /api/kafka/topicos/{nombre}/config
+DELETE /api/kafka/topicos/{nombre}
+GET    /api/kafka/grupos
 ```
 
 ## 7. Cómo ejecutar el proyecto
@@ -124,6 +171,13 @@ Copia los archivos de ejemplo sin secretos y completa tus valores reales en tu e
   - si todavía no existe, copiar `backend/catalog-service/src/main/resources/application-example.properties` a `backend/catalog-service/src/main/resources/application.properties`
 - Backend notifications-service:
   - copiar `backend/notifications-service/src/main/resources/application-example.properties` a `backend/notifications-service/src/main/resources/application.properties`
+- Backend reporting-service:
+  - copiar `backend/reporting-service/src/main/resources/application-example.properties` a `backend/reporting-service/src/main/resources/application.properties`
+- Backend kafka-admin-service:
+  - copiar `backend/kafka-admin-service/src/main/resources/application-example.properties` a `backend/kafka-admin-service/src/main/resources/application.properties`
+- Infraestructura Kafka:
+  - copiar `infra/.env.example` a `infra/.env`
+  - ajustar `EXTERNAL_HOST` según dónde estén los clientes (local o IP pública de EC2)
 
 También puedes usar variables de entorno del sistema, por ejemplo:
 - `AZURE_TENANT_ISSUER_URI`
@@ -139,14 +193,33 @@ También puedes usar variables de entorno del sistema, por ejemplo:
 - `RABBITMQ_PORT`
 - `RABBITMQ_USERNAME`
 - `RABBITMQ_PASSWORD`
+- `KAFKA_BOOTSTRAP_SERVERS` (por defecto `localhost:9092,localhost:9093,localhost:9094`)
+- `EXTERNAL_HOST` (solo para `infra/.env`; dirección que los brokers anuncian a clientes externos)
+- `KAFKA_UI_PORT` (por defecto `8085`)
 
-### 2) Levantar RabbitMQ local
-Desde la raíz del repositorio:
+### 2) Levantar RabbitMQ y Kafka local
+Desde la raíz del repositorio, RabbitMQ:
 ```powershell
 docker compose up -d
 docker compose ps
 ```
 RabbitMQ debe aparecer como activo/healthy. La consola de administración queda en http://localhost:15672; los puertos AMQP y de administración están enlazados solo a la interfaz local.
+
+Kafka (3 ZooKeeper + 3 brokers + Kafka UI):
+```powershell
+copy infra\.env.example infra\.env
+docker compose -f infra\docker-compose.yml --env-file infra\.env up -d
+docker compose -f infra\docker-compose.yml ps
+```
+Espera a que los tres brokers estén `healthy` y crea los tópicos:
+```powershell
+pwsh infra\scripts\crear-topicos.ps1
+```
+En Bash:
+```bash
+bash infra/scripts/crear-topicos.sh
+```
+Los tópicos son `pedidos.eventos` (3 particiones, 7 días de retención) y `stock.eventos` (3 particiones, compactado). Kafka UI queda en http://localhost:8085. Detalle completo en [docs/kafka-guia.md](docs/kafka-guia.md).
 
 ### 3) Ejecutar frontend (Angular)
 ```bash
@@ -177,19 +250,40 @@ cd backend\orders-service
 cd backend\catalog-service
 .\mvnw.cmd spring-boot:run
 ```
+```powershell
+cd backend\reporting-service
+.\mvnw.cmd spring-boot:run
+```
+```powershell
+cd backend\kafka-admin-service
+.\mvnw.cmd spring-boot:run
+```
 Los microservicios quedarán disponibles en:
 - Orders: http://localhost:8081
 - Catalog: http://localhost:8082
+- Reporting: http://localhost:8083
+- Kafka Admin: http://localhost:8084
 - Notifications: consumidor sin endpoint HTTP
+- Kafka UI: http://localhost:8085
 
-Inicia RabbitMQ y `notifications-service` antes de publicar pedidos para que se creen la cola y sus bindings. En AWS EC2, ejecuta RabbitMQ en la misma instancia y configura `RABBITMQ_HOST=localhost`; no abras los puertos del broker en el Security Group.
+Inicia RabbitMQ y `notifications-service` antes de publicar pedidos para que se creen la cola y sus bindings. Inicia Kafka y crea los tópicos antes de arrancar `reporting-service` y `kafka-admin-service`. En AWS EC2, ejecuta RabbitMQ y Kafka en la misma instancia y configura `RABBITMQ_HOST=localhost` y `KAFKA_BOOTSTRAP_SERVERS=localhost:9092,localhost:9093,localhost:9094`; no abras los puertos de RabbitMQ en el Security Group.
 
 ### 5) Verificar salud inicial
 - Frontend: abrir http://localhost:4200
 - Orders service: http://localhost:8081/actuator/health (si está habilitado)
 - Catalog service: http://localhost:8082/actuator/health (si está habilitado)
+- Reporting service: http://localhost:8083/api/reportes/kpis con un token Admin u Operador
+- Kafka Admin: http://localhost:8084/api/kafka/topicos con un token Admin
+- Kafka UI: http://localhost:8085
 
-### 6) Recomendaciones de seguridad
+### 6) Despliegue en EC2
+La guía completa está en [docs/despliegue-ec2.md](docs/despliegue-ec2.md): instancia recomendada, Security Group, instalación de Docker/Java/Maven, secretos fuera del repositorio, clúster Kafka, systemd y verificación. El resumen es:
+
+```bash
+bash infra/scripts/desplegar-ec2.sh --instalar
+```
+
+### 7) Recomendaciones de seguridad
 - Nunca subir archivos con credenciales reales ni conexiones a BD al repositorio.
 - Mantener `application.properties` y `environment.ts` locales y no versionados.
 - Usar `.env` o variables de entorno del sistema para valores sensibles.
@@ -207,19 +301,31 @@ Inicia RabbitMQ y `notifications-service` antes de publicar pedidos para que se 
 ### Sesión 2 — Backend + seguridad + persistencia
 - [ x] BD cloud configurada y conectada
 - [ x] Entidades y repositorios: Order, OrderItem, Product
-- [ ]x Spring Security valida JWT (issuer, audience, firma, expiración)
+- [ x] Spring Security valida JWT (issuer, audience, firma, expiración)
 - [ x] Endpoints de Pedidos (CRUD + cambio de estado + regla ACEPTADO→DESPACHADO)
 - [ x] Endpoints de Catálogo (CRUD + descuento de stock al aceptar pedido)
 - [ x] API Gateway desplegado con JWT Authorizer + CORS
 
 ### Sesión 3 — Frontend + integración + pruebas
 - [ x] Pantallas `/dashboard`, `/orders`, `/catalog` conectadas a la API
-- [ ]x MsalGuard en rutas protegidas + MsalInterceptor adjuntando token
+- [ x] MsalGuard en rutas protegidas + MsalInterceptor adjuntando token
 - [ x] Diferenciación por rol funcionando
 - [ x] Flujo end-to-end probado (Angular → Gateway → Backend → BD)
 - [ x] Casos 200/401/403 probados y documentados
 - [ x] Repositorio limpio, sin secretos
 - [ x] Recorrido del video EP2 preparado
+
+### Sesión 4 — Kafka, reportería y auditoría
+- [ x] Clúster local: 3 ZooKeeper + 3 brokers + Kafka UI (`infra/`)
+- [ x] Tópicos `pedidos.eventos` y `stock.eventos` con 3 particiones y RF 3
+- [ x] Productor de pedidos después del commit, conviviendo con RabbitMQ
+- [ x] Productor de stock en `catalog-service`
+- [ x] `reporting-service` con grupos `reporteria-group` y `auditoria-group`
+- [ x] KPIs, línea de tiempo y stock por HTTP
+- [ x] `kafka-admin-service` con administración de tópicos y lag
+- [ x] Prueba de integración con broker Kafka embebido
+- [ x] Documentación técnica y de defensa
+- [ x] Guía de despliegue EC2 y unidad systemd para los servicios
 
 ## 9. Seguridad
 
@@ -229,15 +335,17 @@ Inicia RabbitMQ y `notifications-service` antes de publicar pedidos para que se 
 
 ## 10. Alcance del proyecto (progresión)
 
-| Módulo | Evaluación |
-|---|---|
-| Pedidos + Catálogo | **EP1 (actual)** |
-| Notificaciones (RabbitMQ) | EP2 |
-| Reportería y Auditoría (Kafka) | EP3 |
+| Módulo | Evaluación | Estado |
+|---|---|---|
+| Pedidos + Catálogo | **EP1** | Implementado |
+| Notificaciones (RabbitMQ) | EP2 | Implementado |
+| Reportería y Auditoría (Kafka) | EP3 | Implementado |
 
-> El detalle del contraste con EP3 y de las clases/pruebas pendientes está en
-> `docs/contraste-ep3-kafka.md`.
+> La guía técnica de Kafka está en `docs/kafka-guia.md`.
+> El contraste con el escenario EP3, las brechas de RabbitMQ y las decisiones
+> tomadas están en `docs/contraste-ep3-kafka.md`.
+> El manual de usuario general está en `docs/manual-usuario.md`.
 
 ---
 
-*DSY1107 — Desarrollo Cloud Native I — Primer Bloque Evaluativo (EP1/EP2)*
+*DSY1107 — Desarrollo Cloud Native I — EP1/EP2/EP3*

@@ -105,6 +105,15 @@ spring.datasource.password=${DB_PASSWORD}
 spring.jpa.hibernate.ddl-auto=update
 spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.PostgreSQLDialect
 pedidos360.catalog.internal-token=${PEDIDOS360_INTERNAL_TOKEN}
+
+# Kafka (mismos valores para orders, catalog, reporting y kafka-admin)
+spring.kafka.bootstrap-servers=${KAFKA_BOOTSTRAP_SERVERS:localhost:9092,localhost:9093,localhost:9094}
+spring.kafka.client-id=orders-service
+spring.kafka.producer.key-serializer=org.apache.kafka.common.serialization.StringSerializer
+spring.kafka.producer.value-serializer=org.springframework.kafka.support.serializer.JacksonJsonSerializer
+spring.kafka.producer.acks=all
+spring.kafka.producer.properties.enable.idempotence=true
+spring.kafka.producer.properties.spring.json.add.type.headers=false
 ```
 
 ---
@@ -118,11 +127,60 @@ Sigue exactamente los mismos pasos que en orders-service, con los valores reales
 
 ```properties
 pedidos360.internal-token=${PEDIDOS360_INTERNAL_TOKEN}
+
+spring.kafka.bootstrap-servers=${KAFKA_BOOTSTRAP_SERVERS:localhost:9092,localhost:9093,localhost:9094}
+spring.kafka.client-id=catalog-service
+spring.kafka.producer.key-serializer=org.apache.kafka.common.serialization.StringSerializer
+spring.kafka.producer.value-serializer=org.springframework.kafka.support.serializer.JacksonJsonSerializer
+spring.kafka.producer.acks=all
+spring.kafka.producer.properties.enable.idempotence=true
+spring.kafka.producer.properties.spring.json.add.type.headers=false
 ```
 
 ---
 
-## 4. Plantilla para completar manualmente
+## 4. Kafka: infraestructura y microservicios
+
+### Paso 1: configurar `infra/.env`
+1. Copia `infra/.env.example` a `infra/.env` (este archivo no se versiona).
+2. Define `EXTERNAL_HOST`:
+   - `localhost` si los microservicios y Kafka están en la misma máquina o EC2.
+   - la IP pública de la EC2 si Postman u otra máquina se conecta desde fuera.
+3. Deja `KAFKA_BOOTSTRAP_SERVERS=localhost:9092,localhost:9093,localhost:9094` cuando los microservicios corren en la misma instancia que los brokers.
+4. `KAFKA_UI_PORT` es el puerto de la interfaz web (por defecto `8085`).
+
+```properties
+EXTERNAL_HOST=localhost
+KAFKA_BOOTSTRAP_SERVERS=localhost:9092,localhost:9093,localhost:9094
+KAFKA_UI_PORT=8085
+```
+
+Si cambia la IP pública de la EC2, actualiza `EXTERNAL_HOST` y vuelve a levantar el compose. Abre en el Security Group los puertos **9092, 9093 y 9094** solo si un cliente externo los necesita.
+
+### Paso 2: crear los tópicos
+Con los brokers saludables:
+
+```bash
+bash infra/scripts/crear-topicos.sh
+```
+
+o en PowerShell:
+
+```powershell
+pwsh infra/scripts/crear-topicos.ps1
+```
+
+### Paso 3: configurar `reporting-service`
+Copia `backend/reporting-service/src/main/resources/application-example.properties` a `application.properties` y completa `AZURE_TENANT_ISSUER_URI`, `AZURE_API_CLIENT_ID` y, si corresponde, `KAFKA_BOOTSTRAP_SERVERS`.
+
+### Paso 4: configurar `kafka-admin-service`
+Copia `backend/kafka-admin-service/src/main/resources/application-example.properties` a `application.properties` y completa las mismas variables de Entra ID y Kafka.
+
+> Kafka no requiere usuario ni contraseña en este laboratorio (`PLAINTEXT` dentro de la red local). En un entorno real se usaría SASL/SCRAM o mTLS; esas credenciales también deberían vivir fuera de Git.
+
+---
+
+## 5. Plantilla para completar manualmente
 
 Si quieres rellenar los valores reales a mano sin tocar el código, usa esta plantilla:
 
@@ -130,7 +188,7 @@ Si quieres rellenar los valores reales a mano sin tocar el código, usa esta pla
 
 Es un formulario en blanco para completar tus datos reales localmente y mantenerlos fuera del repositorio.
 
-## 5. Recomendación de uso seguro
+## 6. Recomendación de uso seguro
 
 No copies valores reales directamente al repo. Lo correcto es:
 
@@ -152,7 +210,7 @@ $env:PEDIDOS360_INTERNAL_TOKEN="UN_SECRETO_LARGO_Y_ALEATORIO_COMPARTIDO"
 
 Luego el proyecto puede leer esas variables sin guardar secretos en el código.
 
-### Paso 5: configurar RabbitMQ
+### Configurar RabbitMQ
 Para desarrollo local, levanta el broker desde la raíz del repositorio con `docker compose up -d`. El archivo `docker-compose.yml` usa credenciales locales de desarrollo y publica los puertos solo en `127.0.0.1`.
 
 Si necesitas cambiar las credenciales locales, define `RABBITMQ_USERNAME` y `RABBITMQ_PASSWORD` antes de iniciar Docker Compose y configura los mismos valores para los servicios Spring Boot.
@@ -170,13 +228,17 @@ La configuración local usa el mismo usuario y contraseña de desarrollo que el 
 
 ---
 
-## 6. Checklist final
+## 7. Checklist final
 
 Antes de ejecutar la app, valida esto:
 
 - [ ] `frontend/src/environments/environment.ts` tiene valores reales o variables de entorno
 - [ ] `backend/orders-service/src/main/resources/application.properties` tiene solo valores reales locales
 - [ ] `backend/catalog-service/src/main/resources/application.properties` tiene solo valores reales locales
+- [ ] `backend/reporting-service/src/main/resources/application.properties` está configurado y no se versiona
+- [ ] `backend/kafka-admin-service/src/main/resources/application.properties` está configurado y no se versiona
+- [ ] `infra/.env` existe con `EXTERNAL_HOST` correcto y no se versiona
+- [ ] Los tópicos `pedidos.eventos` y `stock.eventos` fueron creados con el script
 - [ ] `application.properties` y `environment.ts` no están en Git como archivos sensibles
 - [ ] Se mantiene el patrón de templates en archivos `example` o `template`
 
