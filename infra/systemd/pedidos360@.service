@@ -1,0 +1,39 @@
+# Unidad systemd para los microservicios de Pedidos360.
+#
+# Instalación:
+#   sudo cp infra/systemd/pedidos360@.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now pedidos360@orders-service
+#
+# El nombre de la instancia (%i) debe coincidir con el jar ubicado en
+# /home/ec2-user/pedidos360-app/<servicio>.jar:
+#   orders-service, catalog-service, notifications-service,
+#   reporting-service y kafka-admin-service.
+#
+# Las variables sensibles se leen desde un archivo fuera del repositorio.
+
+[Unit]
+Description=Pedidos360 - %i
+Documentation=file:///home/ec2-user/pedidos360/docs/despliegue-ec2.md
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ec2-user
+Group=ec2-user
+WorkingDirectory=/home/ec2-user/pedidos360
+EnvironmentFile=/home/ec2-user/pedidos360-config/pedidos360.env
+ExecStart=/usr/bin/java -Xms128m -Xmx384m -jar /home/ec2-user/pedidos360-app/%i.jar
+SuccessExitStatus=143
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+
+# Logs centralizados en journald:
+#   journalctl -u pedidos360@reporting-service -f
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
