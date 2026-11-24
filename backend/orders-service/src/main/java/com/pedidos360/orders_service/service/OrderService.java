@@ -3,6 +3,7 @@ package com.pedidos360.orders_service.service;
 import com.pedidos360.orders_service.model.Order;
 import com.pedidos360.orders_service.repository.OrderRepository;
 import com.pedidos360.orders_service.messaging.PedidoEvento;
+import com.pedidos360.orders_service.messaging.PedidoEventoKafka;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpEntity;
@@ -122,13 +123,29 @@ public class OrderService {
         return guardado;
     }
 
+    /**
+     * Publica el mismo cambio de pedido por los dos canales del proyecto:
+     * RabbitMQ (notificaciones al cliente) y Kafka (reportes y auditoría).
+     *
+     * Los dos son eventos de Spring y cada productor los escucha después del
+     * commit, así que si la transacción falla no se publica nada en ninguno.
+     */
     private void publicarEvento(Order pedido) {
-        PedidoEvento evento = new PedidoEvento(
+        PedidoEvento eventoRabbit = new PedidoEvento(
                 pedido.getId(),
                 pedido.getEstado(),
                 pedido.getCliente(),
                 LocalDateTime.now());
-        eventPublisher.publishEvent(evento);
+        eventPublisher.publishEvent(eventoRabbit);
+
+        PedidoEventoKafka eventoKafka = new PedidoEventoKafka(
+                pedido.getId(),
+                pedido.getEstado(),
+                pedido.getCliente(),
+                pedido.getProductoId(),
+                pedido.getCantidad(),
+                LocalDateTime.now());
+        eventPublisher.publishEvent(eventoKafka);
     }
 
     private boolean esTransicionPermitida(String estadoActual, String nuevoEstado) {

@@ -2,6 +2,7 @@ package com.pedidos360.orders_service.service;
 
 import com.pedidos360.orders_service.model.Order;
 import com.pedidos360.orders_service.messaging.PedidoEvento;
+import com.pedidos360.orders_service.messaging.PedidoEventoKafka;
 import com.pedidos360.orders_service.repository.OrderRepository;
 import org.springframework.context.ApplicationEventPublisher;
 import org.junit.jupiter.api.BeforeEach;
@@ -98,8 +99,16 @@ class OrderServiceTests {
         assertEquals("CREADO", creado.getEstado());
         org.mockito.ArgumentCaptor<Object> eventoCaptor =
                 org.mockito.ArgumentCaptor.forClass(Object.class);
-        verify(eventPublisher).publishEvent(eventoCaptor.capture());
-        assertEquals(PedidoEvento.class, eventoCaptor.getValue().getClass());
-        assertEquals("CREADO", ((PedidoEvento) eventoCaptor.getValue()).getEstado());
+        verify(eventPublisher, times(2)).publishEvent(eventoCaptor.capture());
+
+        java.util.List<Object> eventos = eventoCaptor.getAllValues();
+        assertEquals(PedidoEvento.class, eventos.get(0).getClass());
+        assertEquals("CREADO", ((PedidoEvento) eventos.get(0)).getEstado());
+
+        assertEquals(PedidoEventoKafka.class, eventos.get(1).getClass());
+        PedidoEventoKafka eventoKafka = (PedidoEventoKafka) eventos.get(1);
+        assertEquals("CREADO", eventoKafka.getEstado());
+        assertEquals(20L, eventoKafka.getProductoId());
+        assertEquals(2, eventoKafka.getCantidad());
     }
 }
