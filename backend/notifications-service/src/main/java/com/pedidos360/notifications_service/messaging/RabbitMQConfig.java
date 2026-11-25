@@ -6,6 +6,8 @@ import org.springframework.amqp.core.DirectExchange;
 import org.springframework.amqp.core.ExchangeBuilder;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.core.QueueBuilder;
+import org.springframework.amqp.rabbit.connection.ConnectionFactory;
+import org.springframework.amqp.rabbit.core.RabbitAdmin;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -26,6 +28,15 @@ public class RabbitMQConfig {
     public static final String PEDIDO_DESPACHADO = "pedido.despachado";
     public static final String PEDIDO_ENTREGADO = "pedido.entregado";
     public static final String PEDIDO_CANCELADO = "pedido.cancelado";
+
+    /**
+     * Spring Boot 4 ya no registra RabbitAdmin automáticamente, así que lo
+     * declaramos sobre la ConnectionFactory configurada por spring.rabbitmq.*.
+     */
+    @Bean
+    public RabbitAdmin rabbitAdmin(ConnectionFactory connectionFactory) {
+        return new RabbitAdmin(connectionFactory);
+    }
 
     @Bean
     public DirectExchange pedidosExchange() {
