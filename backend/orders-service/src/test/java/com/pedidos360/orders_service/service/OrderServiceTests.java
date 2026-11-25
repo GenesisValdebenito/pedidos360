@@ -91,6 +91,42 @@ class OrderServiceTests {
     }
 
     @Test
+    void clientePuedeCancelarSuPropioPedidoCreado() {
+        when(orderRepository.findByIdParaActualizar(1L)).thenReturn(Optional.of(pedido));
+        when(orderRepository.save(pedido)).thenReturn(pedido);
+
+        Order cancelado = orderService.cancelar(1L, "cliente@ejemplo.com", false);
+
+        assertEquals("CANCELADO", cancelado.getEstado());
+        verify(eventPublisher).publishEvent(any(PedidoEvento.class));
+        verify(eventPublisher).publishEvent(any(PedidoEventoKafka.class));
+        verifyNoInteractions(restTemplate);
+    }
+
+    @Test
+    void clienteNoPuedeCancelarPedidoDeOtraPersona() {
+        when(orderRepository.findByIdParaActualizar(1L)).thenReturn(Optional.of(pedido));
+
+        assertThrows(SecurityException.class,
+                () -> orderService.cancelar(1L, "otra-persona@ejemplo.com", false));
+
+        verify(orderRepository, never()).save(any(Order.class));
+        verifyNoInteractions(eventPublisher);
+    }
+
+    @Test
+    void noPermiteCancelarUnPedidoYaAceptado() {
+        pedido.setEstado("ACEPTADO");
+        when(orderRepository.findByIdParaActualizar(1L)).thenReturn(Optional.of(pedido));
+
+        assertThrows(RuntimeException.class,
+                () -> orderService.cancelar(1L, "cliente@ejemplo.com", false));
+
+        verify(orderRepository, never()).save(any(Order.class));
+        verifyNoInteractions(eventPublisher);
+    }
+
+    @Test
     void alCrearPedidoPublicaEventoDeCreacion() {
         when(orderRepository.save(pedido)).thenReturn(pedido);
 

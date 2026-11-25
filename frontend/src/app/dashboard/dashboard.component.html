@@ -1,0 +1,305 @@
+<div class="page">
+  <header class="page-head">
+    <div>
+      <span class="eyebrow">{{ esStaff ? 'Reportería y auditoría' : 'Mi cuenta' }}</span>
+      <h1>{{ esStaff ? 'Dashboard' : 'Mi resumen' }}</h1>
+      <p class="page-sub">
+        <ng-container *ngIf="esStaff">
+          Indicadores calculados por <span class="mono">reporting-service</span> a partir de los eventos de Kafka.
+        </ng-container>
+        <ng-container *ngIf="!esStaff">
+          Estado de tus pedidos, actualizado automáticamente.
+        </ng-container>
+      </p>
+    </div>
+
+    <div class="toolbar">
+      <span class="pill"><span class="dot"></span> Auto · 8 s</span>
+      <span class="muted text-xs" *ngIf="ultimaActualizacion">
+        Actualizado {{ ultimaActualizacion | date:'HH:mm:ss' }}
+      </span>
+      <button type="button" class="btn btn-ghost btn-sm" (click)="cargar()" [disabled]="cargando">
+        Actualizar
+      </button>
+    </div>
+  </header>
+
+  <div *ngIf="error" class="alert alert-error">
+    <div>
+      <strong>No se pudo actualizar el panel.</strong>
+      <p>{{ error }}</p>
+    </div>
+    <button type="button" class="btn btn-sm" (click)="cargar()">Reintentar</button>
+  </div>
+
+  <div *ngIf="cargando && !error" class="card">
+    <div class="loading"><span class="spinner"></span> Cargando información…</div>
+  </div>
+
+  <!-- ===================== Vista Admin / Operador ===================== -->
+  <ng-container *ngIf="esStaff && !cargando && !error">
+    <section class="grid grid-kpi">
+      <article class="stat is-primary">
+        <div class="stat-label">Pedidos creados</div>
+        <div class="stat-value">{{ (kpis?.pedidosCreados || 0) | number }}</div>
+        <div class="stat-hint">Eventos con estado CREADO</div>
+      </article>
+      <article class="stat">
+        <div class="stat-label">Unidades solicitadas</div>
+        <div class="stat-value">{{ (kpis?.unidadesSolicitadas || 0) | number }}</div>
+        <div class="stat-hint">Suma de cantidades</div>
+      </article>
+      <article class="stat is-success">
+        <div class="stat-label">Entregados</div>
+        <div class="stat-value">{{ (kpis?.pedidosEntregados || 0) | number }}</div>
+        <div class="stat-hint">Flujo completado</div>
+      </article>
+      <article class="stat is-danger">
+        <div class="stat-label">Cancelados</div>
+        <div class="stat-value">{{ (kpis?.pedidosCancelados || 0) | number }}</div>
+        <div class="stat-hint">Antes de aceptar</div>
+      </article>
+      <article class="stat is-warning">
+        <div class="stat-label">Tasa de cancelación</div>
+        <div class="stat-value">{{ (kpis?.tasaCancelacionPorcentaje || 0) | number:'1.0-1' }}%</div>
+        <div class="stat-hint">Sobre pedidos creados</div>
+      </article>
+      <article class="stat">
+        <div class="stat-label">Promedio unidades</div>
+        <div class="stat-value">{{ (kpis?.promedioUnidadesPorPedido || 0) | number:'1.0-1' }}</div>
+        <div class="stat-hint">Por pedido</div>
+      </article>
+    </section>
+
+    <section class="grid grid-2">
+      <article class="card">
+        <div class="card-head">
+          <div>
+            <h2>Pedidos por estado</h2>
+            <p>Distribución del flujo completo.</p>
+          </div>
+          <span class="badge-plain">{{ auditoria.length }} eventos recientes</span>
+        </div>
+        <div class="card-body">
+          <div class="bars">
+            <div class="bar-row" *ngFor="let fila of estados">
+              <span class="muted text-sm">{{ etiquetaEstado(fila.estado) }}</span>
+              <div class="bar-track">
+                <div class="bar-fill" [style.width.%]="fila.porcentaje"></div>
+              </div>
+              <span class="num">{{ fila.total }}</span>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="card" *ngIf="esAdmin; else actividadReciente">
+        <div class="card-head">
+          <div>
+            <h2>Consumer groups</h2>
+            <p>Lag por grupo según <span class="mono">kafka-admin-service</span>.</p>
+          </div>
+          <span class="badge-plain">Kafka</span>
+        </div>
+        <div class="card-body">
+          <div class="stack" *ngIf="grupos.length > 0; else sinGrupos">
+            <div class="group-row" *ngFor="let grupo of grupos">
+              <div>
+                <strong class="mono text-sm">{{ grupo.grupo }}</strong>
+                <p class="muted text-xs">{{ grupo.miembros }} miembro(s) · {{ grupo.offsets.length }} particiones</p>
+              </div>
+              <span class="badge" [ngClass]="totalLag(grupo) === 0 ? 'badge-entregado' : 'badge-en_preparacion'">
+                lag {{ totalLag(grupo) }}
+              </span>
+            </div>
+          </div>
+          <ng-template #sinGrupos>
+            <div class="empty">
+              <strong>Sin grupos activos</strong>
+              <span>Los grupos aparecen cuando reporting-service consume los tópicos.</span>
+            </div>
+          </ng-template>
+        </div>
+        <div class="card-foot">
+          <p class="muted text-xs">Detalle completo en Kafka UI, puerto 8085.</p>
+        </div>
+      </article>
+
+      <ng-template #actividadReciente>
+        <article class="card">
+          <div class="card-head">
+            <div>
+              <h2>Actividad reciente</h2>
+              <p>Últimos eventos consumidos desde Kafka.</p>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="stack" *ngIf="auditoria.length > 0; else sinActividad">
+              <div class="activity-row" *ngFor="let evento of auditoria.slice(0, 5)">
+                <span class="badge" [ngClass]="claseEstado(evento.estado)">{{ etiquetaEstado(evento.estado) }}</span>
+                <span class="text-sm">Pedido <strong>#{{ evento.pedidoId }}</strong></span>
+                <span class="muted text-xs">{{ evento.recibidoEn | date:'HH:mm:ss' }}</span>
+              </div>
+            </div>
+            <ng-template #sinActividad>
+              <div class="empty">
+                <strong>Todavía no hay eventos</strong>
+                <span>Crea o cambia un pedido para ver actividad.</span>
+              </div>
+            </ng-template>
+          </div>
+        </article>
+      </ng-template>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <div>
+          <h2>Línea de tiempo de auditoría</h2>
+          <p>Eventos de <span class="mono">pedidos.eventos</span> consumidos por <span class="mono">auditoria-group</span>.</p>
+        </div>
+        <span class="badge-plain">{{ auditoria.length }} eventos</span>
+      </div>
+
+      <div *ngIf="auditoria.length === 0" class="empty">
+        <strong>Sin eventos de auditoría</strong>
+        <span>Cuando se cree o cambie un pedido, aparecerá aquí en segundos.</span>
+      </div>
+
+      <div class="table-wrap" *ngIf="auditoria.length > 0">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Recibido</th>
+              <th>Pedido</th>
+              <th>Estado</th>
+              <th>Cliente</th>
+              <th>Producto</th>
+              <th class="num">Cantidad</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let evento of auditoria">
+              <td class="mono text-xs nowrap">{{ (evento.recibidoEn || evento.timestamp) | date:'dd-MM HH:mm:ss' }}</td>
+              <td class="mono strong">#{{ evento.pedidoId }}</td>
+              <td><span class="badge" [ngClass]="claseEstado(evento.estado)">{{ etiquetaEstado(evento.estado) }}</span></td>
+              <td class="text-xs">{{ evento.cliente }}</td>
+              <td class="mono text-xs">#{{ evento.productoId }}</td>
+              <td class="num">{{ evento.cantidad }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <div>
+          <h2>Stock actual</h2>
+          <p>Último valor por producto desde el tópico compactado <span class="mono">stock.eventos</span>.</p>
+        </div>
+        <span class="badge-plain">{{ stock.length }} productos</span>
+      </div>
+
+      <div *ngIf="stock.length === 0" class="empty">
+        <strong>Sin eventos de stock</strong>
+        <span>El stock se publica cuando el catálogo cambia o se acepta un pedido.</span>
+      </div>
+
+      <div class="table-wrap" *ngIf="stock.length > 0">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Producto</th>
+              <th class="num">Stock</th>
+              <th class="num">Precio</th>
+              <th>Actualizado</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let item of stock">
+              <td>
+                <span class="strong">{{ item.nombre || ('Producto #' + item.productoId) }}</span>
+                <span class="muted text-xs mono"> · #{{ item.productoId }}</span>
+              </td>
+              <td class="num"><span [ngClass]="claseStock(item.stock)">{{ item.stock }}</span></td>
+              <td class="num">{{ formatearPrecio(item.precio) }}</td>
+              <td class="text-xs muted nowrap">{{ item.actualizadoEn | date:'dd-MM HH:mm' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </ng-container>
+
+  <!-- ===================== Vista Cliente ===================== -->
+  <ng-container *ngIf="!esStaff && !cargando && !error">
+    <section class="grid grid-kpi">
+      <article class="stat is-primary">
+        <div class="stat-label">Mis pedidos</div>
+        <div class="stat-value">{{ pedidos.length | number }}</div>
+        <div class="stat-hint">Total histórico</div>
+      </article>
+      <article class="stat is-warning">
+        <div class="stat-label">En curso</div>
+        <div class="stat-value">{{ pedidosEnCurso | number }}</div>
+        <div class="stat-hint">Aceptados o en preparación</div>
+      </article>
+      <article class="stat is-success">
+        <div class="stat-label">Entregados</div>
+        <div class="stat-value">{{ pedidosEntregadosCliente | number }}</div>
+        <div class="stat-hint">Pedidos completados</div>
+      </article>
+      <article class="stat is-danger">
+        <div class="stat-label">Cancelados</div>
+        <div class="stat-value">{{ pedidosCanceladosCliente | number }}</div>
+        <div class="stat-hint">Pedidos anulados</div>
+      </article>
+    </section>
+
+    <div class="alert alert-warning" *ngIf="pedidosPendientes > 0">
+      <div>
+        <strong>Tienes {{ pedidosPendientes }} pedido(s) esperando aceptación.</strong>
+        <p>Puedes cancelarlos mientras sigan en estado CREADO.</p>
+      </div>
+      <a class="btn btn-sm" routerLink="/orders">Ir a Pedidos</a>
+    </div>
+
+    <section class="card">
+      <div class="card-head">
+        <div>
+          <h2>Pedidos recientes</h2>
+          <p>Los cambios de estado se reflejan automáticamente cada 8 segundos.</p>
+        </div>
+        <a class="btn btn-ghost btn-sm" routerLink="/orders">Ver todos</a>
+      </div>
+
+      <div *ngIf="misPedidosRecientes.length === 0" class="empty">
+        <strong>Aún no tienes pedidos</strong>
+        <span>Ve a Pedidos para crear el primero desde el catálogo.</span>
+        <a class="btn btn-primary btn-sm mt-2" routerLink="/orders">Crear pedido</a>
+      </div>
+
+      <div class="table-wrap" *ngIf="misPedidosRecientes.length > 0">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Pedido</th>
+              <th>Producto</th>
+              <th class="num">Cantidad</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let pedido of misPedidosRecientes">
+              <td class="mono strong">#{{ pedido.id }}</td>
+              <td class="mono text-xs">#{{ pedido.productoId }}</td>
+              <td class="num">{{ pedido.cantidad }}</td>
+              <td><span class="badge" [ngClass]="claseEstado(pedido.estado)">{{ etiquetaEstado(pedido.estado) }}</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </ng-container>
+</div>

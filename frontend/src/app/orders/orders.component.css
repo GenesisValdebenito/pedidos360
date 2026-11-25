@@ -1,0 +1,27 @@
+:host {
+  display: block;
+}
+
+.total {
+  display: flex;
+  align-items: center;
+  min-height: 38px;
+  font-family: var(--mono);
+  font-size: 1.05rem;
+  color: var(--text);
+}
+
+.error-inline {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.search {
+  min-width: min(300px, 100%);
+}
+
+@media (max-width: 640px) {
+  .card-head .search {
+    width: 100%;
+  }
+}

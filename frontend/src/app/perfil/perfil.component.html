@@ -1,0 +1,86 @@
+<div class="page">
+  <header class="page-head">
+    <div>
+      <span class="eyebrow">Cuenta</span>
+      <h1>Perfil</h1>
+      <p class="page-sub">Datos de la sesión entregados por Microsoft Entra ID.</p>
+    </div>
+    <span class="badge" [ngClass]="session.rolBadgeClass">{{ session.rolPrincipal }}</span>
+  </header>
+
+  <section class="card">
+    <div class="profile-hero">
+      <span class="avatar avatar-lg">{{ session.iniciales }}</span>
+      <div>
+        <h2>{{ nombre }}</h2>
+        <p class="muted">{{ correo }}</p>
+        <div class="chips">
+          <span *ngFor="let rol of session.roles" class="badge" [ngClass]="'badge-' + rol.toLowerCase()">{{ rol }}</span>
+          <span *ngIf="session.roles.length === 0" class="badge-plain">Sin roles</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="profile-grid">
+      <div class="profile-item">
+        <span>Nombre</span>
+        <strong>{{ nombre }}</strong>
+      </div>
+      <div class="profile-item">
+        <span>Correo / usuario</span>
+        <strong>{{ correo }}</strong>
+      </div>
+      <div class="profile-item">
+        <span>Rol principal</span>
+        <strong>{{ session.rolPrincipal }}</strong>
+      </div>
+      <div class="profile-item">
+        <span>Acceso a reportería</span>
+        <strong>{{ session.esStaff ? 'Sí (Admin/Operador)' : 'No' }}</strong>
+      </div>
+      <div class="profile-item">
+        <span>Tenant</span>
+        <strong class="mono">{{ tenantId }}</strong>
+      </div>
+      <div class="profile-item">
+        <span>Object ID</span>
+        <strong class="mono">{{ objetoId }}</strong>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <div>
+        <h2>Claims del token</h2>
+        <p>El backend valida firma, emisor, audiencia y scope en cada petición.</p>
+      </div>
+      <span class="badge-plain">{{ claims.length }} claims</span>
+    </div>
+
+    <div class="alert alert-info" style="margin: 16px 20px 0;">
+      <span>Estos datos son de solo lectura. No incluyen el access token ni secretos.</span>
+    </div>
+
+    <div class="table-wrap mt-3">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Claim</th>
+            <th>Valor</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let fila of claims">
+            <td class="mono strong">{{ fila.clave }}</td>
+            <td class="mono text-xs">{{ fila.valor }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card-foot">
+      <p class="muted text-xs">Emisor: <span class="mono">{{ emisor }}</span></p>
+    </div>
+  </section>
+</div>

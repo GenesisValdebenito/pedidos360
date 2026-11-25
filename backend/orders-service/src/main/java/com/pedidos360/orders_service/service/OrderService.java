@@ -15,6 +15,7 @@ import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Servicio de pedidos — contiene toda la lógica de negocio.
@@ -118,6 +119,39 @@ public class OrderService {
 
         // Actualizamos el estado y guardamos en base de datos
         pedido.setEstado(nuevoEstado);
+        Order guardado = orderRepository.save(pedido);
+        publicarEvento(guardado);
+        return guardado;
+    }
+
+    /**
+     * Cancela un pedido en nombre del cliente dueño.
+     *
+     * Reglas:
+     * - Admin u Operador pueden cancelar cualquier pedido (igual que con cambiarEstado).
+     * - Un Cliente solo puede cancelar sus propios pedidos.
+     * - Solo se permite mientras el pedido está en estado CREADO, antes de
+     *   descontar stock. Si ya fue aceptado, debe seguir el flujo normal.
+     *
+     * Si el pedido no existe o no pertenece al cliente, el controller responde
+     * 404 para no revelar la existencia de pedidos de otras personas.
+     */
+    @Transactional
+    public Order cancelar(Long id, String cliente, boolean esAdminOperador) {
+        Order pedido = orderRepository.findByIdParaActualizar(id).orElse(null);
+        if (pedido == null) {
+            return null;
+        }
+
+        if (!esAdminOperador && !Objects.equals(pedido.getCliente(), cliente)) {
+            throw new SecurityException("El pedido no pertenece al usuario");
+        }
+
+        if (!"CREADO".equals(pedido.getEstado())) {
+            throw new RuntimeException("Solo se puede cancelar un pedido en estado CREADO");
+        }
+
+        pedido.setEstado("CANCELADO");
         Order guardado = orderRepository.save(pedido);
         publicarEvento(guardado);
         return guardado;

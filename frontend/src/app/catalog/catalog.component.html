@@ -1,0 +1,141 @@
+<div class="page">
+  <header class="page-head">
+    <div>
+      <span class="eyebrow">Inventario</span>
+      <h1>Catálogo</h1>
+      <p class="page-sub">
+        {{ esAdmin ? 'Crea y actualiza productos. Los cambios se publican en stock.eventos.' : 'Productos disponibles para crear pedidos.' }}
+      </p>
+    </div>
+
+    <div class="toolbar">
+      <span class="pill"><span class="dot"></span> Auto · 8 s</span>
+      <span class="muted text-xs" *ngIf="ultimaActualizacion">
+        Actualizado {{ ultimaActualizacion | date:'HH:mm:ss' }}
+      </span>
+      <button type="button" class="btn btn-ghost btn-sm" (click)="cargarProductos()" [disabled]="cargando">
+        Actualizar
+      </button>
+    </div>
+  </header>
+
+  <div *ngIf="cambioDetectado" class="alert alert-info">
+    <div>
+      <strong>Se detectaron cambios en el catálogo.</strong>
+      <p>La lista ya está actualizada con la última información.</p>
+    </div>
+    <button type="button" class="btn btn-sm" (click)="cerrarAviso()">Cerrar</button>
+  </div>
+
+  <div *ngIf="error" class="alert alert-error">
+    <div>
+      <strong>No se pudo cargar el catálogo.</strong>
+      <p>{{ error }}</p>
+    </div>
+    <button type="button" class="btn btn-sm" (click)="cargarProductos()">Reintentar</button>
+  </div>
+
+  <!-- Formulario solo para Admin -->
+  <section class="card" *ngIf="esAdmin">
+    <div class="card-head">
+      <div>
+        <h2>{{ editando ? 'Editar producto' : 'Nuevo producto' }}</h2>
+        <p>{{ editando ? 'Modifica los datos y guarda los cambios.' : 'El producto queda disponible de inmediato para los clientes.' }}</p>
+      </div>
+      <span class="badge badge-admin">Admin</span>
+    </div>
+
+    <div class="card-body">
+      <div class="form-grid">
+        <label class="field wide">
+          <span>Nombre</span>
+          <input class="input" type="text" [(ngModel)]="form.name" placeholder="Ej: Café en grano 1 kg" maxlength="120" />
+        </label>
+        <label class="field">
+          <span>Precio (CLP)</span>
+          <input class="input" type="number" min="1" [(ngModel)]="form.price" />
+        </label>
+        <label class="field">
+          <span>Stock</span>
+          <input class="input" type="number" min="0" [(ngModel)]="form.stock" />
+        </label>
+      </div>
+
+      <div class="form-actions">
+        <button type="button" class="btn btn-primary" (click)="guardarProducto()" [disabled]="guardando">
+          {{ guardando ? 'Guardando…' : (editando ? 'Guardar cambios' : 'Crear producto') }}
+        </button>
+        <button type="button" class="btn btn-ghost" *ngIf="editando" (click)="cancelarEdicion()">
+          Cancelar edición
+        </button>
+      </div>
+
+      <div *ngIf="mensajeForm" class="alert alert-success mt-3">{{ mensajeForm }}</div>
+      <div *ngIf="errorForm" class="alert alert-error mt-3">{{ errorForm }}</div>
+    </div>
+  </section>
+
+  <!-- Listado -->
+  <section class="card">
+    <div class="card-head">
+      <div>
+        <h2>Productos</h2>
+        <p>{{ productosFiltrados.length }} de {{ productos.length }} productos.</p>
+      </div>
+      <div class="search">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <circle cx="11" cy="11" r="7" />
+          <path d="m20 20-3.2-3.2" />
+        </svg>
+        <input class="input" type="search" placeholder="Buscar producto" [(ngModel)]="filtro" />
+      </div>
+    </div>
+
+    <div *ngIf="cargando && !error" class="loading"><span class="spinner"></span> Cargando productos…</div>
+
+    <div *ngIf="!cargando && productos.length === 0 && !error" class="empty">
+      <strong>No hay productos</strong>
+      <span *ngIf="esAdmin">Crea el primero con el formulario de arriba.</span>
+      <span *ngIf="!esAdmin">Pide a un administrador que cargue productos.</span>
+    </div>
+
+    <div *ngIf="!cargando && productos.length > 0 && productosFiltrados.length === 0" class="empty">
+      <strong>Sin resultados</strong>
+      <span>Prueba con otro nombre o ID.</span>
+    </div>
+
+    <div class="table-wrap" *ngIf="!cargando && productosFiltrados.length > 0">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Producto</th>
+            <th class="num">Precio</th>
+            <th class="num">Stock</th>
+            <th *ngIf="esAdmin">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let producto of productosFiltrados">
+            <td class="mono text-xs">#{{ producto.id }}</td>
+            <td>
+              <span class="strong">{{ producto.name }}</span>
+              <span *ngIf="producto.stock <= 5" class="badge badge-cancelado" style="margin-left: 8px;">Stock bajo</span>
+            </td>
+            <td class="num">{{ formatearPrecio(producto.price) }}</td>
+            <td class="num"><span [ngClass]="claseStock(producto.stock)">{{ producto.stock }}</span></td>
+            <td *ngIf="esAdmin">
+              <button type="button" class="btn btn-ghost btn-sm" (click)="editarProducto(producto)">
+                Editar
+              </button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card-foot" *ngIf="!esAdmin && productos.length > 0">
+      <p class="muted text-xs">Solo el rol Admin puede crear o modificar productos.</p>
+    </div>
+  </section>
+</div>

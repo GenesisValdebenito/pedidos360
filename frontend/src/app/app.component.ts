@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy, Inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterOutlet, RouterLink } from '@angular/router';
+import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
 import { Subject } from 'rxjs';
 import { filter, takeUntil } from 'rxjs/operators';
 import {
@@ -16,11 +16,14 @@ import {
   RedirectRequest
 } from '@azure/msal-browser';
 import { environment } from '../environments/environment';
+import { SessionService } from './core/session.service';
+
+type Tema = 'claro' | 'oscuro';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, RouterOutlet, RouterLink],
+  imports: [CommonModule, RouterOutlet, RouterLink, RouterLinkActive],
   templateUrl: './app.component.html',
   styleUrl: './app.component.css'
 })
@@ -28,13 +31,18 @@ export class AppComponent implements OnInit, OnDestroy {
   title = 'pedidos360-frontend';
   loginDisplay = false;
   userName = '';
+  tema: Tema = 'claro';
+
   private readonly _destroying$ = new Subject<void>();
 
   constructor(
     @Inject(MSAL_GUARD_CONFIG) private msalGuardConfig: MsalGuardConfiguration,
     private authService: MsalService,
-    private msalBroadcastService: MsalBroadcastService
-  ) {}
+    private msalBroadcastService: MsalBroadcastService,
+    public session: SessionService
+  ) {
+    this.inicializarTema();
+  }
 
   ngOnInit(): void {
     // Procesa el retorno del redirect de login de forma asíncrona
@@ -84,6 +92,32 @@ export class AppComponent implements OnInit, OnDestroy {
     } else {
       this.userName = '';
     }
+  }
+
+  get esTemaOscuro(): boolean {
+    return this.tema === 'oscuro';
+  }
+
+  alternarTema(): void {
+    this.tema = this.tema === 'claro' ? 'oscuro' : 'claro';
+    localStorage.setItem('pedidos360-tema', this.tema);
+    this.aplicarTema();
+  }
+
+  private inicializarTema(): void {
+    const guardado = localStorage.getItem('pedidos360-tema');
+    if (guardado === 'claro' || guardado === 'oscuro') {
+      this.tema = guardado;
+    } else {
+      const prefiereOscuro = window.matchMedia
+        && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      this.tema = prefiereOscuro ? 'oscuro' : 'claro';
+    }
+    this.aplicarTema();
+  }
+
+  private aplicarTema(): void {
+    document.documentElement.setAttribute('data-theme', this.tema);
   }
 
   login(): void {

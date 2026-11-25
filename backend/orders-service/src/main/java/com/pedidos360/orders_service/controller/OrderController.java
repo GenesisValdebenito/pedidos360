@@ -151,4 +151,43 @@ public class OrderController {
             return ResponseEntity.badRequest().build();
         }
     }
+
+    /**
+     * PUT /api/orders/{id}/cancelar
+     *
+     * Cancela un pedido. Lo puede usar:
+     * - El cliente dueño, solo mientras el pedido está en CREADO.
+     * - Admin u Operador, sobre cualquier pedido en CREADO.
+     *
+     * El cliente SIEMPRE se toma del token, nunca del body, así un usuario
+     * no puede cancelar pedidos de otra persona.
+     *
+     * Códigos:
+     * - 200: cancelado correctamente
+     * - 400: el pedido ya no está en CREADO
+     * - 404: el pedido no existe o no pertenece al cliente
+     */
+    @PutMapping("/{id}/cancelar")
+    public ResponseEntity<Order> cancelar(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable Long id) {
+
+        String cliente = jwt.getClaimAsString("preferred_username");
+        List<String> roles = jwt.getClaimAsStringList("roles");
+        boolean esAdminOperador = roles != null &&
+                (roles.contains("Admin") || roles.contains("Operador"));
+
+        try {
+            Order pedido = orderService.cancelar(id, cliente, esAdminOperador);
+            if (pedido == null) {
+                return ResponseEntity.notFound().build();
+            }
+            return ResponseEntity.ok(pedido);
+        } catch (SecurityException e) {
+            // No revelamos si el pedido existe o pertenece a otra persona.
+            return ResponseEntity.notFound().build();
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
 }

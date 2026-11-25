@@ -6,6 +6,15 @@
   <base href="/">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <script>
+    // Aplica el tema guardado antes de que Angular cargue para evitar destellos.
+    (function () {
+      var guardado = localStorage.getItem('pedidos360-tema');
+      var oscuro = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      var tema = guardado === 'claro' || guardado === 'oscuro' ? guardado : (oscuro ? 'oscuro' : 'claro');
+      document.documentElement.setAttribute('data-theme', tema);
+    })();
+  </script>
 </head>
 <body>
   <app-root></app-root>

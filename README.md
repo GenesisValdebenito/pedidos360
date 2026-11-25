@@ -114,6 +114,7 @@ pedidos360-dsy1107/
 | Ver pedidos propios | Sí | Sí | Sí |
 | Ver todos los pedidos | Sí | Sí | No |
 | Cambiar estado de pedido | Opcional | Sí | No |
+| Cancelar pedido en CREADO | Sí | Sí | Solo los propios |
 | Crear/editar producto | Sí | No | No |
 | Administrar stock | Sí | No | No |
 | Ver KPIs, auditoría y stock | Sí | Sí | No |
@@ -127,6 +128,7 @@ POST   /api/orders
 GET    /api/orders
 GET    /api/orders/{id}
 PUT    /api/orders/{id}/status
+PUT    /api/orders/{id}/cancelar
 
 CATÁLOGO
 GET    /api/catalog/products

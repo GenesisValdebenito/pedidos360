@@ -1,0 +1,21 @@
+:host {
+  display: block;
+}
+
+.field.wide {
+  grid-column: span 2;
+}
+
+.search {
+  min-width: min(260px, 100%);
+}
+
+@media (max-width: 720px) {
+  .field.wide {
+    grid-column: span 1;
+  }
+
+  .card-head .search {
+    width: 100%;
+  }
+}

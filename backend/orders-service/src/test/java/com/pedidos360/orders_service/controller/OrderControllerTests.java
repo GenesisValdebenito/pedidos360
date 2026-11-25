@@ -54,6 +54,37 @@ class OrderControllerTests {
         assertEquals(HttpStatus.OK, respuesta.getStatusCode());
     }
 
+    @Test
+    void clientePuedeCancelarSuPropioPedido() {
+        Order pedido = new Order(1L, "cliente@ejemplo.com", "CANCELADO", 20L, 1);
+        when(orderService.cancelar(1L, "cliente@ejemplo.com", false)).thenReturn(pedido);
+
+        var respuesta = orderController.cancelar(jwt("cliente@ejemplo.com", List.of("Cliente")), 1L);
+
+        assertEquals(HttpStatus.OK, respuesta.getStatusCode());
+        assertEquals("CANCELADO", respuesta.getBody().getEstado());
+    }
+
+    @Test
+    void cancelarPedidoAjenoRespondeNotFound() {
+        when(orderService.cancelar(1L, "cliente@ejemplo.com", false))
+                .thenThrow(new SecurityException("no pertenece"));
+
+        var respuesta = orderController.cancelar(jwt("cliente@ejemplo.com", List.of("Cliente")), 1L);
+
+        assertEquals(HttpStatus.NOT_FOUND, respuesta.getStatusCode());
+    }
+
+    @Test
+    void cancelarPedidoYaAceptadoRespondeBadRequest() {
+        when(orderService.cancelar(1L, "cliente@ejemplo.com", false))
+                .thenThrow(new RuntimeException("estado inválido"));
+
+        var respuesta = orderController.cancelar(jwt("cliente@ejemplo.com", List.of("Cliente")), 1L);
+
+        assertEquals(HttpStatus.BAD_REQUEST, respuesta.getStatusCode());
+    }
+
     private Jwt jwt(String username, List<String> roles) {
         return Jwt.withTokenValue("token-prueba")
                 .header("alg", "none")

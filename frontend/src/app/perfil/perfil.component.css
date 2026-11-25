@@ -1,0 +1,8 @@
+:host {
+  display: block;
+}
+
+.profile-item strong.mono {
+  font-size: 0.78rem;
+  word-break: break-all;
+}

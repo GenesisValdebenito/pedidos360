@@ -1,0 +1,186 @@
+<div class="page">
+  <header class="page-head">
+    <div>
+      <span class="eyebrow">Operación</span>
+      <h1>Pedidos</h1>
+      <p class="page-sub">
+        <ng-container *ngIf="esStaff">Todos los pedidos del sistema. Avanza el estado según el flujo permitido.</ng-container>
+        <ng-container *ngIf="!esStaff">Crea pedidos desde el catálogo y sigue su estado en tiempo real.</ng-container>
+      </p>
+    </div>
+
+    <div class="toolbar">
+      <span class="pill"><span class="dot"></span> Auto · 8 s</span>
+      <span class="muted text-xs" *ngIf="ultimaActualizacion">
+        Actualizado {{ ultimaActualizacion | date:'HH:mm:ss' }}
+      </span>
+      <button type="button" class="btn btn-ghost btn-sm" (click)="refrescar()" [disabled]="cargando">
+        Actualizar
+      </button>
+    </div>
+  </header>
+
+  <div *ngIf="error" class="alert alert-error">
+    <div>
+      <strong>No se pudieron cargar los pedidos.</strong>
+      <p>{{ error }}</p>
+    </div>
+    <button type="button" class="btn btn-sm" (click)="refrescar()">Reintentar</button>
+  </div>
+
+  <!-- Formulario de creación (Cliente) -->
+  <section class="card" *ngIf="esCliente">
+    <div class="card-head">
+      <div>
+        <h2>Nuevo pedido</h2>
+        <p>El cliente se toma automáticamente del token; el estado inicial es CREADO.</p>
+      </div>
+      <span class="badge-plain">Stock en vivo</span>
+    </div>
+
+    <div class="card-body">
+      <div class="form-grid">
+        <label class="field">
+          <span>Producto</span>
+          <ng-container *ngIf="productos.length > 0; else productoSinLista">
+            <select class="select" [(ngModel)]="nuevoProductoId">
+              <option *ngFor="let producto of productos" [ngValue]="producto.id">
+                {{ producto.name }} · {{ formatearPrecio(producto.price) }}
+              </option>
+            </select>
+          </ng-container>
+          <ng-template #productoSinLista>
+            <input class="input" type="number" min="1" [(ngModel)]="nuevoProductoId" placeholder="ID de producto" />
+          </ng-template>
+        </label>
+
+        <label class="field">
+          <span>Cantidad</span>
+          <input class="input" type="number" min="1" [(ngModel)]="nuevaCantidad" />
+        </label>
+
+        <div class="field">
+          <span>Total estimado</span>
+          <strong class="total">{{ formatearPrecio(totalEstimado) }}</strong>
+        </div>
+
+        <div class="field">
+          <span>&nbsp;</span>
+          <button type="button" class="btn btn-primary" (click)="crearPedido()" [disabled]="!puedeCrear">
+            {{ creando ? 'Creando…' : 'Crear pedido' }}
+          </button>
+        </div>
+      </div>
+
+      <p class="muted text-xs mt-2" *ngIf="productoSel">
+        Stock disponible: <strong>{{ productoSel.stock }}</strong> unidades.
+        <span *ngIf="productoSel.stock < nuevaCantidad" class="error-inline">
+          La cantidad supera el stock disponible.
+        </span>
+      </p>
+
+      <div *ngIf="mensajeCrear" class="alert alert-success mt-3">{{ mensajeCrear }}</div>
+      <div *ngIf="errorCrear" class="alert alert-error mt-3">{{ errorCrear }}</div>
+    </div>
+  </section>
+
+  <!-- Listado -->
+  <section class="card">
+    <div class="card-head">
+      <div>
+        <h2>{{ esStaff ? 'Todos los pedidos' : 'Mis pedidos' }}</h2>
+        <p>{{ pedidosFiltrados.length }} de {{ pedidos.length }} pedidos visibles.</p>
+      </div>
+      <div class="search">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <circle cx="11" cy="11" r="7" />
+          <path d="m20 20-3.2-3.2" />
+        </svg>
+        <input class="input" type="search" placeholder="Buscar pedido, cliente o estado"
+               [(ngModel)]="filtro" />
+      </div>
+    </div>
+
+    <div *ngIf="cargando && !error" class="loading"><span class="spinner"></span> Cargando pedidos…</div>
+
+    <div *ngIf="!cargando && pedidos.length === 0 && !error" class="empty">
+      <strong>No hay pedidos todavía</strong>
+      <span *ngIf="esCliente">Usa el formulario de arriba para crear el primero.</span>
+      <span *ngIf="!esCliente">Cuando los clientes creen pedidos aparecerán aquí automáticamente.</span>
+    </div>
+
+    <div *ngIf="!cargando && pedidos.length > 0 && pedidosFiltrados.length === 0" class="empty">
+      <strong>Sin resultados</strong>
+      <span>Prueba con otro ID, cliente o estado.</span>
+    </div>
+
+    <div class="table-wrap" *ngIf="!cargando && pedidosFiltrados.length > 0">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Pedido</th>
+            <th *ngIf="esStaff">Cliente</th>
+            <th>Producto</th>
+            <th class="num">Cantidad</th>
+            <th>Estado</th>
+            <th *ngIf="esStaff">Cambiar estado</th>
+            <th *ngIf="!esStaff && esCliente">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let pedido of pedidosFiltrados">
+            <td class="mono strong">#{{ pedido.id }}</td>
+            <td *ngIf="esStaff" class="text-xs">{{ pedido.cliente }}</td>
+            <td>
+              <span class="strong">{{ nombreProducto(pedido.productoId) }}</span>
+              <span class="muted text-xs mono"> · #{{ pedido.productoId }}</span>
+            </td>
+            <td class="num">{{ pedido.cantidad }}</td>
+            <td><span class="badge" [ngClass]="claseEstado(pedido.estado)">{{ etiquetaEstado(pedido.estado) }}</span></td>
+
+            <td *ngIf="esStaff">
+              <ng-container *ngIf="siguientesEstados(pedido.estado).length > 0; else pedidoFinal">
+                <div class="table-actions">
+                  <select class="select" [(ngModel)]="pedido.nuevoEstado">
+                    <option *ngFor="let estado of siguientesEstados(pedido.estado)" [value]="estado">
+                      {{ etiquetaEstado(estado) }}
+                    </option>
+                  </select>
+                  <button type="button" class="btn btn-primary btn-sm"
+                          (click)="cambiarEstado(pedido)" [disabled]="cambiandoId === pedido.id">
+                    {{ cambiandoId === pedido.id ? '…' : 'Aplicar' }}
+                  </button>
+                </div>
+              </ng-container>
+              <ng-template #pedidoFinal>
+                <span class="badge-plain">Final</span>
+              </ng-template>
+            </td>
+
+            <td *ngIf="!esStaff && esCliente">
+              <button *ngIf="pedido.estado === 'CREADO'" type="button" class="btn btn-danger btn-sm"
+                      (click)="cancelar(pedido)" [disabled]="cancelandoId === pedido.id">
+                {{ cancelandoId === pedido.id ? 'Cancelando…' : 'Cancelar' }}
+              </button>
+              <span *ngIf="pedido.estado !== 'CREADO'" class="muted text-xs">—</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card-foot" *ngIf="esStaff && pedidos.length > 0">
+      <p class="muted text-xs">
+        Flujo permitido: CREADO → ACEPTADO → EN PREPARACIÓN → DESPACHADO → ENTREGADO.
+        La cancelación solo se permite desde CREADO.
+      </p>
+    </div>
+  </section>
+
+  <div class="toast-stack" *ngIf="toasts.length > 0">
+    <div class="toast" *ngFor="let toast of toasts" [ngClass]="'toast-' + toast.tipo">
+      <span>{{ toast.texto }}</span>
+      <button type="button" (click)="cerrarToast(toast.id)" aria-label="Cerrar aviso">×</button>
+    </div>
+  </div>
+</div>
